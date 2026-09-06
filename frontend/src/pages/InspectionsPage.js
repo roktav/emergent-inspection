@@ -76,7 +76,7 @@ export default function InspectionsPage() {
               ) : rows.map((r) => (
                 <TableRow key={r.id} data-testid={`inspection-row-${r.id}`} className="hover:bg-brand-bg/60">
                   <TableCell className="text-sm">{r.inspection_date}</TableCell>
-                  <TableCell className="text-sm font-semibold">{r.truck_unit_number} <span className="text-xs font-normal text-muted-foreground">{r.truck_type}</span></TableCell>
+                  <TableCell className="text-sm font-semibold">{r.truck_hull_number} <span className="font-mono text-xs font-normal text-muted-foreground">{r.truck_vin_number}</span></TableCell>
                   <TableCell className="text-sm">{r.driver_name}</TableCell>
                   <TableCell className="text-sm">{r.km_hm}</TableCell>
                   <TableCell className="text-sm">{r.total_items}</TableCell>

@@ -63,7 +63,7 @@ export default function DashboardPage() {
             <li key={i.id}>
               <Link to={`/inspections/${i.id}`} className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-brand-bg/60" data-testid={`recent-inspection-${i.id}`}>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{i.truck_unit_number} <span className="ml-1 text-xs font-normal text-muted-foreground">{i.truck_type}</span></p>
+                  <p className="truncate text-sm font-semibold">{i.truck_hull_number} <span className="ml-1 font-mono text-xs font-normal text-muted-foreground">{i.truck_vin_number}</span></p>
                   <p className="truncate text-xs text-muted-foreground">{i.inspection_date} · {i.driver_name} · {i.km_hm} KM/HM</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">

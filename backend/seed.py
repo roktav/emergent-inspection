@@ -51,12 +51,14 @@ CHECKLIST = [
 ]
 
 TRUCKS = [
-    ("DT-001", "L-001", "EV", "BYD", "Q3 EV"),
-    ("DT-002", "L-002", "ICE", "Hino", "FM 260 JD"),
-    ("DT-003", "L-003", "EV", "BYD", "Q3 EV"),
-    ("DT-004", "L-004", "ICE", "Mitsubishi", "Fuso FJ 2528"),
-    ("DT-005", "L-005", "ICE", "Hino", "FM 260 JD"),
+    ("MHRDT001EV2600001", "DT-001", "BYD", "Q3 EV", "6x4", True),
+    ("MHRDT002IC2600002", "DT-002", "Hino", "FM 260 JD", "6x4", False),
+    ("MHRDT003EV2600003", "DT-003", "BYD", "Q3 EV", "6x4", True),
+    ("MHRDT004IC2600004", "DT-004", "Mitsubishi", "Fuso FJ 2528", "6x4", False),
+    ("MHRDT005IC2600005", "DT-005", "Hino", "FM 260 JD", "8x4", False),
 ]
+
+SCHEMA_VERSION = 2
 
 
 async def upsert_user(email, name, role, password, company_id=None, site_id=None):
@@ -105,55 +107,69 @@ async def seed_all():
     driver_id = await upsert_user("driver@iti.demo", "Rizal Ramli", "driver", "Driver@1234", company_id, site_id)
     await upsert_user("driver2@iti.demo", "Ababil Ka'bah", "driver", "Driver@1234", company_id, site_id)
 
-    truck_ids = []
-    for unit, hull, ttype, brand, model in TRUCKS:
-        t = await db.dump_trucks.find_one({"site_id": site_id, "unit_number": unit})
-        if not t:
-            res = await db.dump_trucks.insert_one({"company_id": company_id, "site_id": site_id, "unit_number": unit,
-                                                   "hull_number": hull, "plate_number": None, "truck_type": ttype,
-                                                   "brand": brand, "model": model, "is_active": True})
-            truck_ids.append((str(res.inserted_id), unit, ttype))
-        else:
-            truck_ids.append((str(t["_id"]), unit, ttype))
+    meta = await db.meta.find_one({"_id": "schema"})
+    if (meta or {}).get("version", 1) < SCHEMA_VERSION:
+        for c in ("dump_trucks", "inspection_categories", "inspection_items", "inspections"):
+            await db[c].delete_many({})
+        await db.meta.update_one({"_id": "schema"}, {"$set": {"version": SCHEMA_VERSION}}, upsert=True)
 
-    cat = await db.inspection_categories.find_one({"site_id": site_id, "name": "Chassis Inspection"})
-    if not cat:
-        res = await db.inspection_categories.insert_one({
-            "company_id": company_id, "site_id": site_id, "name": "Chassis Inspection",
-            "description": "Pergerakan Driver Berlawanan Arah Jarum Jam (counter-clockwise walk-around)",
-            "order": 1, "is_active": True})
-        cat_id = str(res.inserted_id)
-        docs = [{"company_id": company_id, "site_id": site_id, "category_id": cat_id, "order": i + 1,
-                 "name": n, "guidance": g, "status_options": o, "ev_only": ev, "is_active": True}
-                for i, (n, g, o, ev) in enumerate(CHECKLIST)]
-        await db.inspection_items.insert_many(docs)
-    else:
-        cat_id = str(cat["_id"])
+    cat_ids = {}
+    for name, desc, ev_flag in (
+        ("Chassis Inspection", "Pergerakan Driver Berlawanan Arah Jarum Jam (counter-clockwise walk-around)", False),
+        ("EV Components", "Only in EV truck — battery, e-axle, motor and charging brackets", True),
+    ):
+        cat = await db.inspection_categories.find_one({"site_id": site_id, "name": name})
+        if not cat:
+            res = await db.inspection_categories.insert_one({"company_id": company_id, "site_id": site_id, "name": name,
+                                                             "description": desc, "item_ids": [], "is_active": True})
+            cid = str(res.inserted_id)
+            docs = [{"company_id": company_id, "site_id": site_id, "category_id": cid, "name": n, "guidance": g,
+                     "status_options": o, "is_active": True} for (n, g, o, ev) in CHECKLIST if ev == ev_flag]
+            ins = await db.inspection_items.insert_many(docs)
+            await db.inspection_categories.update_one({"_id": res.inserted_id},
+                                                      {"$set": {"item_ids": [str(i) for i in ins.inserted_ids]}})
+            cat_ids[name] = cid
+        else:
+            cat_ids[name] = str(cat["_id"])
+
+    truck_ids = []
+    for vin, hull, brand, model, layout, is_ev in TRUCKS:
+        t = await db.dump_trucks.find_one({"site_id": site_id, "hull_number": hull})
+        if not t:
+            cats = [cat_ids["Chassis Inspection"]] + ([cat_ids["EV Components"]] if is_ev else [])
+            res = await db.dump_trucks.insert_one({"company_id": company_id, "site_id": site_id, "unit_vin_number": vin,
+                                                   "hull_number": hull, "plate_number": None, "brand": brand, "model": model,
+                                                   "drivetrain_layout": layout, "category_ids": cats, "is_active": True})
+            truck_ids.append((str(res.inserted_id), hull, vin, cats))
+        else:
+            truck_ids.append((str(t["_id"]), hull, t.get("unit_vin_number"), t.get("category_ids", [])))
 
     if await db.inspections.count_documents({"site_id": site_id}) == 0:
-        items = await db.inspection_items.find({"site_id": site_id}).sort("order", 1).to_list(200)
+        cats = {str(c["_id"]): c for c in await db.inspection_categories.find({"site_id": site_id}).to_list(50)}
+        items = {str(i["_id"]): i for i in await db.inspection_items.find({"site_id": site_id}).to_list(500)}
         rng = random.Random(42)
         today = datetime.now(timezone.utc).date()
         for day_offset in range(1, 8):
             d = today - timedelta(days=day_offset)
-            for tid, unit, ttype in truck_ids[:4]:
+            for tid, hull, vin, tcats in truck_ids[:4]:
                 if rng.random() < 0.2:
                     continue
-                applicable = [it for it in items if ttype == "EV" or not it.get("ev_only")]
                 results = []
-                for it in applicable:
-                    status = "OK"
-                    if rng.random() < 0.05:
-                        status = rng.choice([o for o in it["status_options"] if o != "OK"])
-                    results.append({"item_id": str(it["_id"]), "item_name": it["name"], "category_name": "Chassis Inspection",
-                                    "status": status, "note": "Ditemukan retak halus" if status != "OK" else None, "photos": []})
+                for cid in tcats:
+                    for iid in cats[cid]["item_ids"]:
+                        it = items[iid]
+                        status = "OK"
+                        if rng.random() < 0.03:
+                            status = rng.choice([o for o in it["status_options"] if o != "OK"])
+                        results.append({"item_id": iid, "item_name": it["name"], "category_name": cats[cid]["name"],
+                                        "status": status, "note": "Ditemukan retak halus" if status != "OK" else None, "photos": []})
                 defects = sum(1 for r in results if r["status"] != "OK")
                 start = datetime(d.year, d.month, d.day, 6, 30, tzinfo=timezone.utc)
                 end = start + timedelta(minutes=rng.randint(18, 40))
                 approved = rng.random() < 0.7
                 await db.inspections.insert_one({
-                    "company_id": company_id, "site_id": site_id, "truck_id": tid, "truck_unit_number": unit,
-                    "truck_type": ttype, "driver_id": driver_id, "driver_name": "Rizal Ramli",
+                    "company_id": company_id, "site_id": site_id, "truck_id": tid, "truck_hull_number": hull,
+                    "truck_vin_number": vin, "driver_id": driver_id, "driver_name": "Rizal Ramli",
                     "km_hm": 12000 + day_offset * 85 + rng.randint(0, 40), "started_at": start.isoformat(),
                     "completed_at": end.isoformat(), "inspection_date": d.isoformat(), "results": results,
                     "total_items": len(results), "defect_count": defects, "has_defect": defects > 0,

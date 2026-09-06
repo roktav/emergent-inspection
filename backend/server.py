@@ -96,12 +96,13 @@ class UserIn(BaseModel):
 class DumpTruck(BaseDocument):
     company_id: Optional[str] = None
     site_id: Optional[str] = None
-    unit_number: str
-    hull_number: Optional[str] = None
+    unit_vin_number: str
+    hull_number: str
     plate_number: Optional[str] = None
-    truck_type: Literal["ICE", "EV"] = "ICE"
     brand: Optional[str] = None
     model: Optional[str] = None
+    drivetrain_layout: Optional[str] = None
+    category_ids: List[str] = []
     is_active: bool = True
 
 
@@ -110,20 +111,22 @@ class InspectionCategory(BaseDocument):
     site_id: Optional[str] = None
     name: str
     description: Optional[str] = None
-    order: int = 0
+    item_ids: List[str] = []
     is_active: bool = True
 
 
 class InspectionItem(BaseDocument):
     company_id: Optional[str] = None
     site_id: Optional[str] = None
-    category_id: str
-    order: int = 0
+    category_id: Optional[str] = None
     name: str
     guidance: Optional[str] = None
     status_options: List[str] = ["OK", "NOT_OK", "KOROSI"]
-    ev_only: bool = False
     is_active: bool = True
+
+
+class IdList(BaseModel):
+    ids: List[str]
 
 
 class ItemResult(BaseModel):
@@ -148,8 +151,8 @@ class Inspection(BaseDocument):
     company_id: Optional[str] = None
     site_id: str
     truck_id: str
-    truck_unit_number: str
-    truck_type: str
+    truck_hull_number: str
+    truck_vin_number: Optional[str] = None
     driver_id: str
     driver_name: str
     km_hm: float
@@ -374,6 +377,14 @@ async def delete_user(id_: str, user: dict = Depends(require_roles(*ADMIN_ROLES)
 
 
 # ---------- Generic site-scoped masters (trucks, categories, items) ----------
+async def sync_item_category(item_id: str, new_cat: Optional[str], old_cat: Optional[str]):
+    if old_cat and old_cat != new_cat:
+        await db.inspection_categories.update_one({"_id": oid(old_cat)}, {"$pull": {"item_ids": item_id}})
+    if new_cat:
+        await db.inspection_categories.update_one({"_id": oid(new_cat), "item_ids": {"$ne": item_id}},
+                                                  {"$push": {"item_ids": item_id}})
+
+
 def register_master(path: str, coll: str, Model, sort_key: str):
     @api_router.get(f"/{path}")
     async def _list(site_id: Optional[str] = None, user: dict = Depends(require_roles(*ALL_ROLES))):
@@ -382,43 +393,91 @@ def register_master(path: str, coll: str, Model, sort_key: str):
     @api_router.post(f"/{path}")
     async def _create(body: Model, user: dict = Depends(require_roles(*ADMIN_ROLES))):
         data = await enforce_scope(user, body.to_mongo())
+        data.pop("item_ids", None)
+        data.pop("category_ids", None)
         res = await db[coll].insert_one(data)
+        if coll == "inspection_items":
+            await sync_item_category(str(res.inserted_id), data.get("category_id"), None)
         return Model.from_mongo(await db[coll].find_one({"_id": res.inserted_id})).out()
 
     @api_router.put(f"/{path}/{{id_}}")
     async def _update(id_: str, body: Model, user: dict = Depends(require_roles(*ADMIN_ROLES))):
-        await find_or_404(coll, id_, scope_filter(user))
+        existing = await find_or_404(coll, id_, scope_filter(user))
         data = await enforce_scope(user, body.to_mongo())
+        data.pop("item_ids", None)
+        data.pop("category_ids", None)
+        if coll == "inspection_items" and "category_id" not in data:
+            data["category_id"] = None
         await db[coll].update_one({"_id": oid(id_)}, {"$set": data})
+        if coll == "inspection_items":
+            await sync_item_category(id_, data.get("category_id"), existing.get("category_id"))
         return Model.from_mongo(await db[coll].find_one({"_id": oid(id_)})).out()
 
     @api_router.delete(f"/{path}/{{id_}}")
     async def _delete(id_: str, user: dict = Depends(require_roles(*ADMIN_ROLES))):
-        await find_or_404(coll, id_, scope_filter(user))
-        if coll == "inspection_categories" and await db.inspection_items.count_documents({"category_id": id_}):
-            raise HTTPException(status_code=400, detail="Category still has items")
+        existing = await find_or_404(coll, id_, scope_filter(user))
+        if coll == "inspection_categories" and existing.get("item_ids"):
+            raise HTTPException(status_code=400, detail="Category still has assigned items")
+        if coll == "inspection_items":
+            await db.inspection_categories.update_many({"item_ids": id_}, {"$pull": {"item_ids": id_}})
+        if coll == "inspection_categories":
+            await db.dump_trucks.update_many({"category_ids": id_}, {"$pull": {"category_ids": id_}})
         await db[coll].delete_one({"_id": oid(id_)})
         return {"ok": True}
 
 
-register_master("trucks", "dump_trucks", DumpTruck, "unit_number")
-register_master("categories", "inspection_categories", InspectionCategory, "order")
-register_master("items", "inspection_items", InspectionItem, "order")
+register_master("trucks", "dump_trucks", DumpTruck, "hull_number")
+register_master("categories", "inspection_categories", InspectionCategory, "name")
+register_master("items", "inspection_items", InspectionItem, "name")
+
+
+@api_router.put("/categories/{id_}/items")
+async def assign_items(id_: str, body: IdList, user: dict = Depends(require_roles(*ADMIN_ROLES))):
+    cat = await find_or_404("inspection_categories", id_, scope_filter(user))
+    ids = list(dict.fromkeys(body.ids))
+    valid = await db.inspection_items.find({"_id": {"$in": [oid(i) for i in ids]}, "site_id": cat["site_id"]}).to_list(1000)
+    valid_ids = {str(v["_id"]) for v in valid}
+    ids = [i for i in ids if i in valid_ids]
+    removed = [i for i in cat.get("item_ids", []) if i not in ids]
+    if removed:
+        await db.inspection_items.update_many({"_id": {"$in": [oid(i) for i in removed]}, "category_id": id_},
+                                              {"$set": {"category_id": None}})
+    if ids:
+        old_cats = await db.inspection_categories.find({"_id": {"$ne": oid(id_)}, "item_ids": {"$in": ids}}).to_list(200)
+        for oc in old_cats:
+            await db.inspection_categories.update_one({"_id": oc["_id"]}, {"$pull": {"item_ids": {"$in": ids}}})
+        await db.inspection_items.update_many({"_id": {"$in": [oid(i) for i in ids]}}, {"$set": {"category_id": id_}})
+    await db.inspection_categories.update_one({"_id": oid(id_)}, {"$set": {"item_ids": ids}})
+    return InspectionCategory.from_mongo(await db.inspection_categories.find_one({"_id": oid(id_)})).out()
+
+
+@api_router.put("/trucks/{id_}/categories")
+async def assign_categories(id_: str, body: IdList, user: dict = Depends(require_roles(*ADMIN_ROLES))):
+    truck = await find_or_404("dump_trucks", id_, scope_filter(user))
+    ids = list(dict.fromkeys(body.ids))
+    valid = await db.inspection_categories.find({"_id": {"$in": [oid(i) for i in ids]}, "site_id": truck["site_id"]}).to_list(1000)
+    valid_ids = {str(v["_id"]) for v in valid}
+    ids = [i for i in ids if i in valid_ids]
+    await db.dump_trucks.update_one({"_id": oid(id_)}, {"$set": {"category_ids": ids}})
+    return DumpTruck.from_mongo(await db.dump_trucks.find_one({"_id": oid(id_)})).out()
 
 
 # ---------- Inspections ----------
 @api_router.get("/inspections/checklist")
 async def checklist(truck_id: str, user: dict = Depends(require_roles(*ALL_ROLES))):
     truck = await find_or_404("dump_trucks", truck_id, scope_filter(user))
-    flt = {"site_id": truck["site_id"], "is_active": True}
-    if truck["truck_type"] != "EV":
-        flt["ev_only"] = False
-    cats = await db.inspection_categories.find({"site_id": truck["site_id"], "is_active": True}).sort("order", 1).to_list(200)
-    items = await db.inspection_items.find(flt).sort("order", 1).to_list(1000)
+    cat_ids = truck.get("category_ids", [])
+    cats = {str(c["_id"]): c for c in await db.inspection_categories.find(
+        {"_id": {"$in": [oid(i) for i in cat_ids]}, "is_active": True}).to_list(200)}
+    all_item_ids = [i for cid in cat_ids if cid in cats for i in cats[cid].get("item_ids", [])]
+    items = {str(i["_id"]): i for i in await db.inspection_items.find(
+        {"_id": {"$in": [oid(i) for i in all_item_ids]}, "is_active": True}).to_list(2000)}
     groups = []
-    for c in cats:
-        cid = str(c["_id"])
-        its = [InspectionItem.from_mongo(i).out() for i in items if i["category_id"] == cid]
+    for cid in cat_ids:
+        c = cats.get(cid)
+        if not c:
+            continue
+        its = [InspectionItem.from_mongo(items[i]).out() for i in c.get("item_ids", []) if i in items]
         if its:
             groups.append({"category": InspectionCategory.from_mongo(c).out(), "items": its})
     return {"truck": DumpTruck.from_mongo(truck).out(), "groups": groups}
@@ -433,7 +492,7 @@ async def create_inspection(body: InspectionCreate, user: dict = Depends(require
     defects = sum(1 for r in body.results if r.status != "OK")
     insp = Inspection(
         company_id=truck.get("company_id"), site_id=truck["site_id"], truck_id=body.truck_id,
-        truck_unit_number=truck["unit_number"], truck_type=truck["truck_type"], driver_id=user["id"],
+        truck_hull_number=truck["hull_number"], truck_vin_number=truck.get("unit_vin_number"), driver_id=user["id"],
         driver_name=user["name"], km_hm=body.km_hm, started_at=body.started_at.astimezone(timezone.utc).isoformat(),
         completed_at=completed.isoformat(), inspection_date=body.inspection_date or completed.date().isoformat(),
         results=body.results, total_items=len(body.results), defect_count=defects, has_defect=defects > 0,
@@ -513,7 +572,7 @@ async def build_recap(user: dict, site_id: Optional[str], date_from: str, date_t
     if d1 < d0 or (d1 - d0).days > 92:
         raise HTTPException(status_code=400, detail="Invalid date range (max 92 days)")
     dates = [(d0 + timedelta(days=i)).isoformat() for i in range((d1 - d0).days + 1)]
-    trucks = await db.dump_trucks.find(flt).sort("unit_number", 1).to_list(1000)
+    trucks = await db.dump_trucks.find(flt).sort("hull_number", 1).to_list(1000)
     insps = await db.inspections.find(
         {**flt, "inspection_date": {"$gte": date_from, "$lte": date_to}},
         {"results": 0}).sort("completed_at", 1).to_list(20000)
@@ -533,8 +592,8 @@ async def build_recap(user: dict, site_id: Optional[str], date_from: str, date_t
                 c["status"] = "defect"
         all_i = by_truck.get(tid, [])
         rows.append({
-            "id": tid, "unit_number": t["unit_number"], "hull_number": t.get("hull_number"),
-            "truck_type": t["truck_type"], "cells": cells,
+            "id": tid, "hull_number": t["hull_number"], "unit_vin_number": t.get("unit_vin_number"),
+            "brand": t.get("brand"), "model": t.get("model"), "drivetrain_layout": t.get("drivetrain_layout"), "cells": cells,
             "total_inspections": len(all_i), "inspected_days": len(cells),
             "defects_found": sum(i["defect_count"] for i in all_i),
             "defect_inspections": sum(1 for i in all_i if i["has_defect"]),
@@ -560,16 +619,16 @@ async def recap_export(kind: Literal["matrix", "summary"] = "matrix", site_id: O
     buf = io.StringIO()
     w = csv.writer(buf)
     if kind == "matrix":
-        w.writerow(["Unit Number", "Type", *data["dates"]])
+        w.writerow(["Hull Number", "VIN", *data["dates"]])
         for t in data["trucks"]:
-            w.writerow([t["unit_number"], t["truck_type"],
+            w.writerow([t["hull_number"], t["unit_vin_number"] or "",
                         *[{"ok": "OK", "defect": "DEFECT"}.get(t["cells"].get(d, {}).get("status"), "-") for d in data["dates"]]])
     else:
-        w.writerow(["Unit Number", "Hull Number", "Type", "Total Inspections", "Days Inspected", "Defects Found",
+        w.writerow(["Hull Number", "VIN", "Brand", "Model", "Drivetrain", "Total Inspections", "Days Inspected", "Defects Found",
                     "Inspections With Defects", "Approved", "Pending", "Last Inspection", "Last KM/HM"])
         for t in data["trucks"]:
-            w.writerow([t["unit_number"], t["hull_number"] or "", t["truck_type"], t["total_inspections"],
-                        t["inspected_days"], t["defects_found"], t["defect_inspections"], t["approved"], t["pending"],
+            w.writerow([t["hull_number"], t["unit_vin_number"] or "", t["brand"] or "", t["model"] or "", t["drivetrain_layout"] or "",
+                        t["total_inspections"], t["inspected_days"], t["defects_found"], t["defect_inspections"], t["approved"], t["pending"],
                         t["last_inspection"] or "", t["last_km_hm"] or ""])
     buf.seek(0)
     fname = f"recap_{kind}_{date_from}_{date_to}.csv"

@@ -60,7 +60,7 @@ export default function InspectionDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-deep">{t("inspection_detail")}</p>
-            <h1 className="mt-1 font-heading text-3xl font-semibold tracking-tight" data-testid="detail-unit">{insp.truck_unit_number} <span className="text-base font-medium text-muted-foreground">{insp.truck_type}</span></h1>
+            <h1 className="mt-1 font-heading text-3xl font-semibold tracking-tight" data-testid="detail-unit">{insp.truck_hull_number} <span className="font-mono text-sm font-medium text-muted-foreground">{insp.truck_vin_number}</span></h1>
             <p className="text-sm text-muted-foreground">{insp.inspection_date}</p>
           </div>
           <div className="flex flex-col items-end gap-2">

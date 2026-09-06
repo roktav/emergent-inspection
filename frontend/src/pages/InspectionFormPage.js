@@ -68,7 +68,6 @@ function ItemCard({ item, index, result, onChange }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-semibold leading-tight">{item.name}</p>
-            {item.ev_only && <span className="rounded bg-cyan-100 px-1.5 py-0.5 text-[10px] font-bold text-cyan-800">EV</span>}
           </div>
           {item.guidance && <p className="mt-0.5 text-xs text-muted-foreground">{item.guidance}</p>}
         </div>
@@ -158,7 +157,7 @@ export default function InspectionFormPage() {
               <SelectTrigger className="h-11" data-testid="form-truck-select"><SelectValue placeholder={t("select_truck")} /></SelectTrigger>
               <SelectContent className="bg-white">
                 {trucks.map((tr) => (
-                  <SelectItem key={tr.id} value={tr.id} data-testid={`form-truck-opt-${tr.unit_number}`}>{tr.unit_number} · {tr.truck_type}{tr.hull_number ? ` · ${tr.hull_number}` : ""}</SelectItem>
+                  <SelectItem key={tr.id} value={tr.id} data-testid={`form-truck-opt-${tr.hull_number}`}>{tr.hull_number} · {tr.brand || ""} {tr.model || ""}{tr.plate_number ? ` · ${tr.plate_number}` : ""}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -174,12 +173,13 @@ export default function InspectionFormPage() {
         <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
           <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {t("started_at")}: <b className="text-foreground" data-testid="form-started-at">{startedAt.toLocaleString()}</b></span>
           <span>{t("driver_name")}: <b className="text-foreground">{user.name}</b></span>
-          {truck && <span>{t("truck_type")}: <b className="text-foreground">{truck.truck_type}</b></span>}
+          {truck && <span>{t("vin")}: <b className="font-mono text-foreground">{truck.unit_vin_number}</b></span>}
+          {truck?.drivetrain_layout && <span>{t("drivetrain_layout")}: <b className="text-foreground">{truck.drivetrain_layout}</b></span>}
         </div>
       </div>
 
       {truckId && checklist && items.length === 0 && (
-        <div className="mt-5 rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground" data-testid="form-no-checklist">{t("no_checklist")}</div>
+        <div className="mt-5 rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground" data-testid="form-no-checklist">{t("no_categories_hint")}</div>
       )}
 
       {items.length > 0 && (
@@ -198,7 +198,7 @@ export default function InspectionFormPage() {
               {g.category.description && <p className="mb-3 text-xs text-muted-foreground">{g.category.description}</p>}
               <div className="space-y-3">
                 {g.items.map((item) => (
-                  <ItemCard key={item.id} item={item} index={item.order} result={results[item.id] || {}} onChange={(r) => setResults((s) => ({ ...s, [item.id]: r }))} />
+                  <ItemCard key={item.id} item={item} index={items.findIndex((x) => x.id === item.id) + 1} result={results[item.id] || {}} onChange={(r) => setResults((s) => ({ ...s, [item.id]: r }))} />
                 ))}
               </div>
             </section>

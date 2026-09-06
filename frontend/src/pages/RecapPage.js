@@ -92,8 +92,8 @@ export default function RecapPage() {
                   {loading && <tr><td colSpan={99} className="py-10 text-center text-muted-foreground">{t("loading")}</td></tr>}
                   {!loading && data?.trucks.length === 0 && <tr><td colSpan={99} className="py-10 text-center text-muted-foreground">{t("no_data")}</td></tr>}
                   {!loading && data?.trucks.map((tr) => (
-                    <tr key={tr.id} className="border-b last:border-0 hover:bg-brand-bg/50" data-testid={`recap-row-${tr.unit_number}`}>
-                      <td className="px-4 py-2 font-semibold">{tr.unit_number} <span className="ml-1 text-[10px] font-normal text-muted-foreground">{tr.truck_type}</span></td>
+                    <tr key={tr.id} className="border-b last:border-0 hover:bg-brand-bg/50" data-testid={`recap-row-${tr.hull_number}`}>
+                      <td className="px-4 py-2 font-semibold">{tr.hull_number} <span className="ml-1 font-mono text-[10px] font-normal text-muted-foreground">{tr.unit_vin_number}</span></td>
                       {data.dates.map((d) => <td key={d} className="px-1.5 py-2 text-center"><Cell cell={tr.cells[d]} /></td>)}
                     </tr>
                   ))}
@@ -115,16 +115,19 @@ export default function RecapPage() {
               <Table data-testid="recap-summary-table">
                 <TableHeader>
                   <TableRow className="bg-muted/60">
-                    {["unit", "truck_type", "total_inspections", "days_inspected", "defects_found", "defect_inspections", "approved", "pending", "last_inspection", "last_km_hm"].map((h) => (
+                    {["hull_number", "vin", "brand", "model", "drivetrain_layout", "total_inspections", "days_inspected", "defects_found", "defect_inspections", "approved", "pending", "last_inspection", "last_km_hm"].map((h) => (
                       <TableHead key={h} className="text-xs font-semibold uppercase tracking-wide">{t(h)}</TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data?.trucks.map((tr) => (
-                    <TableRow key={tr.id} data-testid={`summary-row-${tr.unit_number}`}>
-                      <TableCell className="font-semibold">{tr.unit_number}</TableCell>
-                      <TableCell>{tr.truck_type}</TableCell>
+                    <TableRow key={tr.id} data-testid={`summary-row-${tr.hull_number}`}>
+                      <TableCell className="font-semibold">{tr.hull_number}</TableCell>
+                      <TableCell className="font-mono text-xs">{tr.unit_vin_number || "—"}</TableCell>
+                      <TableCell>{tr.brand || "—"}</TableCell>
+                      <TableCell>{tr.model || "—"}</TableCell>
+                      <TableCell>{tr.drivetrain_layout || "—"}</TableCell>
                       <TableCell>{tr.total_inspections}</TableCell>
                       <TableCell>{tr.inspected_days} / {data.dates.length}</TableCell>
                       <TableCell><span className={tr.defects_found ? "font-semibold text-red-700" : ""}>{tr.defects_found}</span></TableCell>

@@ -75,7 +75,7 @@ export function FieldInput({ field, value, onChange, testId }) {
   }
 }
 
-export function MasterPage({ titleKey, endpoint, columns, fields, canWrite = true, query, defaults = {}, testPrefix, headerExtra, hint }) {
+export function MasterPage({ titleKey, endpoint, columns, fields, canWrite = true, query, defaults = {}, testPrefix, headerExtra, hint, rowActions, reloadKey }) {
   const { t } = useT();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -95,7 +95,7 @@ export function MasterPage({ titleKey, endpoint, columns, fields, canWrite = tru
       .catch((e) => toast.error(errMsg(e)))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endpoint, queryKey]);
+  }, [endpoint, queryKey, reloadKey]);
 
   useEffect(load, [load]);
 
@@ -188,7 +188,7 @@ export function MasterPage({ titleKey, endpoint, columns, fields, canWrite = tru
                 {columns.map((c) => (
                   <TableHead key={c.key} className="text-xs font-semibold uppercase tracking-wide">{t(c.label)}</TableHead>
                 ))}
-                {canWrite && <TableHead className="w-24 text-right text-xs font-semibold uppercase">{t("actions")}</TableHead>}
+                {canWrite && <TableHead className="w-36 text-right text-xs font-semibold uppercase">{t("actions")}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -209,6 +209,7 @@ export function MasterPage({ titleKey, endpoint, columns, fields, canWrite = tru
                     {canWrite && (
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
+                          {rowActions?.(row)}
                           <Button variant="ghost" size="icon" data-testid={`${testPrefix}-edit-${row.id}`} onClick={() => openEdit(row)}><Pencil className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700" data-testid={`${testPrefix}-delete-${row.id}`} onClick={() => setToDelete(row)}><Trash2 className="h-4 w-4" /></Button>
                         </div>
@@ -261,11 +262,11 @@ export function MasterPage({ titleKey, endpoint, columns, fields, canWrite = tru
   );
 }
 
-export function useLookup(endpoint, enabled = true) {
+export function useLookup(endpoint, enabled = true, reloadKey = 0) {
   const [data, setData] = useState([]);
   useEffect(() => {
     if (!enabled) return;
     api.get(endpoint).then((r) => setData(r.data)).catch(() => {});
-  }, [endpoint, enabled]);
+  }, [endpoint, enabled, reloadKey]);
   return data;
 }
