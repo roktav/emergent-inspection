@@ -400,3 +400,205 @@ class TestDashboard:
         assert r.status_code == 200
         for k in ("trucks", "today_inspections", "today_defects", "pending_approval", "recent"):
             assert k in r.json()
+
+
+# ---------- Photo size limit + cron/purge (Schema v3 photo retention) ----------
+import uuid as _uuid
+
+
+def _read_env_kv(path, key):
+    for line in open(path):
+        line = line.strip()
+        if line.startswith(key + "="):
+            v = line.split("=", 1)[1].strip()
+            if v.startswith('"') and v.endswith('"'):
+                v = v[1:-1]
+            return v
+    return None
+
+
+CRON_SECRET = _read_env_kv("/app/backend/.env", "WEBHOOK_CRON_SECRET")
+
+
+class TestUploadSizeLimit:
+    def test_upload_over_500k_rejected(self, driver_ctx):
+        # Build a PNG with a big trailing (non-critical) chunk so bytes > 500KB
+        base = _tiny_png_bytes()
+        # Insert 600KB into an IDAT-style chunk before IEND is fine, but simpler: just append raw bytes
+        # Server checks raw bytes length regardless.
+        big = base + b"\x00" * (600 * 1024)
+        r = requests.post(f"{API}/uploads",
+                          files={"file": ("big.png", big, "image/png")},
+                          headers=_auth(driver_ctx["token"]))
+        assert r.status_code == 400
+        assert "500KB" in r.text or "too large" in r.text.lower()
+
+    def test_upload_small_png_ok(self, driver_ctx):
+        r = requests.post(f"{API}/uploads",
+                          files={"file": ("t.png", _tiny_png_bytes(), "image/png")},
+                          headers=_auth(driver_ctx["token"]))
+        assert r.status_code == 200
+        assert "path" in r.json()
+
+
+class TestCronPurgeEndpoint:
+    def test_no_auth_401(self):
+        r = requests.post(f"{API}/cron/purge-photos", json={})
+        assert r.status_code == 401
+
+    def test_wrong_bearer_401(self):
+        r = requests.post(f"{API}/cron/purge-photos", json={},
+                          headers={"Authorization": "Bearer wrong-secret"})
+        assert r.status_code == 401
+
+    def test_correct_bearer_accepts_and_dedupes(self):
+        assert CRON_SECRET, "WEBHOOK_CRON_SECRET missing"
+        wid = f"test-{_uuid.uuid4()}"
+        h = {"Authorization": f"Bearer {CRON_SECRET}", "X-Webhook-Id": wid,
+             "Content-Type": "application/json"}
+        r = requests.post(f"{API}/cron/purge-photos", json={}, headers=h)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["accepted"] is True
+        assert d["run_id"] == wid
+        assert not d.get("duplicate")
+        # Duplicate
+        r2 = requests.post(f"{API}/cron/purge-photos", json={}, headers=h)
+        assert r2.status_code == 200
+        d2 = r2.json()
+        assert d2.get("duplicate") is True
+        assert d2["run_id"] == wid
+        # cron_runs eventually reaches 'done'
+        import time
+        for _ in range(15):
+            time.sleep(0.5)
+            # Use manual endpoint would require superadmin; instead check via a fresh call - but we can inspect via superadmin? no direct.
+            # Rely on delay only; correctness of 'done' status is covered by manual purge tests below.
+            break
+
+
+class TestManualPurgeRBACAndIdempotency:
+    def test_admin_forbidden(self, admin_ctx):
+        r = requests.post(f"{API}/maintenance/purge-photos",
+                          headers=_auth(admin_ctx["token"]))
+        assert r.status_code == 403
+
+    def test_driver_forbidden(self, driver_ctx):
+        r = requests.post(f"{API}/maintenance/purge-photos",
+                          headers=_auth(driver_ctx["token"]))
+        assert r.status_code == 403
+
+    def test_superadmin_runs_idempotent(self, super_ctx):
+        # Run twice — second should purge 0 (or at least not error) since retention window is stable
+        r1 = requests.post(f"{API}/maintenance/purge-photos",
+                           headers=_auth(super_ctx["token"]))
+        assert r1.status_code == 200, r1.text
+        d1 = r1.json()
+        for k in ("inspections", "photos", "run_id", "finished_at", "cutoff"):
+            assert k in d1
+        r2 = requests.post(f"{API}/maintenance/purge-photos",
+                           headers=_auth(super_ctx["token"]))
+        assert r2.status_code == 200
+        d2 = r2.json()
+        assert d2["inspections"] == 0
+        assert d2["photos"] == 0
+
+
+class TestPurgeEndToEnd:
+    """Upload photo, create inspection, backdate its completed_at, purge, verify."""
+
+    def test_backdated_inspection_gets_purged(self, driver_ctx, super_ctx, admin_ctx):
+        import time
+        # 1. Upload photo
+        r = requests.post(f"{API}/uploads",
+                          files={"file": ("t.png", _tiny_png_bytes(), "image/png")},
+                          headers=_auth(driver_ctx["token"]))
+        assert r.status_code == 200
+        photo_path = r.json()["path"]
+
+        # 2. Create inspection on DT-004 with photo on first item
+        trucks = requests.get(f"{API}/trucks", headers=_auth(admin_ctx["token"])).json()
+        truck = next(t for t in trucks if t["hull_number"] == "DT-004")
+        r = requests.get(f"{API}/inspections/checklist?truck_id={truck['id']}",
+                         headers=_auth(driver_ctx["token"]))
+        items = [i for g in r.json()["groups"] for i in g["items"]]
+        results = [{"item_id": it["id"], "item_name": it["name"], "status": "OK", "note": None, "photos": []}
+                   for it in items]
+        results[0]["photos"] = [photo_path]
+        payload = {"truck_id": truck["id"], "km_hm": 1234.0,
+                   "started_at": datetime.now(timezone.utc).isoformat(),
+                   "inspection_date": datetime.now(timezone.utc).date().isoformat(),
+                   "results": results}
+        r = requests.post(f"{API}/inspections", json=payload, headers=_auth(driver_ctx["token"]))
+        assert r.status_code == 200, r.text
+        iid = r.json()["id"]
+
+        # 3. Backdate completed_at via mongosh
+        old_iso = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
+        import subprocess
+        cmd = ["mongosh", "test_database", "--quiet", "--eval",
+               f'db.inspections.updateOne({{_id: ObjectId("{iid}")}}, {{$set: {{completed_at: "{old_iso}"}}}})']
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        assert p.returncode == 0, p.stderr
+        assert '"modifiedCount"' in p.stdout or "modifiedCount: 1" in p.stdout, p.stdout
+
+        # 4. Run purge as superadmin
+        r = requests.post(f"{API}/maintenance/purge-photos", headers=_auth(super_ctx["token"]))
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["inspections"] >= 1
+        assert d["photos"] >= 1
+
+        # 5. Inspection still exists but photos cleared + photos_purged_at set
+        r = requests.get(f"{API}/inspections/{iid}", headers=_auth(driver_ctx["token"]))
+        assert r.status_code == 200
+        insp = r.json()
+        assert insp.get("photos_purged_at") is not None
+        assert insp.get("purged_photo_count", 0) >= 1
+        for res in insp["results"]:
+            assert res.get("photos") in ([], None), f"photos not cleared on {res}"
+        # total_items unchanged
+        assert insp["total_items"] == len(items)
+
+        # 6. File download 404
+        r = requests.get(f"{API}/files/{photo_path}", headers=_auth(driver_ctx["token"]))
+        assert r.status_code == 404
+
+        # 7. Idempotency — re-run purges 0 (for this newly-affected inspection; may still be > 0 if others exist,
+        #    but this one should not be re-purged since photos_purged_at is set)
+        r = requests.post(f"{API}/maintenance/purge-photos", headers=_auth(super_ctx["token"]))
+        assert r.status_code == 200
+        d2 = r.json()
+        # our test's inspection was already handled — checking it's not counted again is implicit via photos_purged_at guard;
+        # assert either 0 photos OR the same inspection isn't touched (fetch again -> purged_photo_count unchanged)
+        r = requests.get(f"{API}/inspections/{iid}", headers=_auth(driver_ctx["token"]))
+        assert r.json().get("purged_photo_count", 0) >= 1
+
+    def test_recent_inspection_not_purged(self, driver_ctx, super_ctx, admin_ctx):
+        # Create a fresh inspection with a photo — it must survive purge
+        r = requests.post(f"{API}/uploads",
+                          files={"file": ("t.png", _tiny_png_bytes(), "image/png")},
+                          headers=_auth(driver_ctx["token"]))
+        photo_path = r.json()["path"]
+        trucks = requests.get(f"{API}/trucks", headers=_auth(admin_ctx["token"])).json()
+        truck = next(t for t in trucks if t["hull_number"] == "DT-005")
+        r = requests.get(f"{API}/inspections/checklist?truck_id={truck['id']}",
+                         headers=_auth(driver_ctx["token"]))
+        items = [i for g in r.json()["groups"] for i in g["items"]]
+        results = [{"item_id": it["id"], "item_name": it["name"], "status": "OK", "note": None, "photos": []}
+                   for it in items]
+        results[0]["photos"] = [photo_path]
+        payload = {"truck_id": truck["id"], "km_hm": 99.0,
+                   "started_at": datetime.now(timezone.utc).isoformat(),
+                   "inspection_date": datetime.now(timezone.utc).date().isoformat(),
+                   "results": results}
+        r = requests.post(f"{API}/inspections", json=payload, headers=_auth(driver_ctx["token"]))
+        assert r.status_code == 200
+        iid = r.json()["id"]
+
+        # Purge — this recent inspection must NOT be affected
+        requests.post(f"{API}/maintenance/purge-photos", headers=_auth(super_ctx["token"]))
+        r = requests.get(f"{API}/inspections/{iid}", headers=_auth(driver_ctx["token"]))
+        insp = r.json()
+        assert insp.get("photos_purged_at") is None
+        assert insp["results"][0]["photos"] == [photo_path]

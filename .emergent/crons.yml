@@ -1,0 +1,8 @@
+crons:
+  - name: purge-old-photos
+    description: "Deletes inspection photos older than 3 months daily at 02:00 UTC; inspection records are kept"
+    cron: "0 2 * * *"
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    endpoint: "{{BASE_URL}}/api/cron/purge-photos"
+    method: POST
+    enabled: true

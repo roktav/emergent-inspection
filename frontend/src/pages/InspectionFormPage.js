@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Camera, X, Gauge, Clock, CheckCircle2 } from "lucide-react";
+import { Camera, X, Gauge, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useT } from "../lib/i18n";
 import { api, errMsg, fileUrl } from "../lib/api";
 import { StatusPill } from "../components/StatusPill";
+import { CameraCapture } from "../components/CameraCapture";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
-import { Progress } from "../components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { SiteSelect, useSiteScope } from "./MasterPages";
 
@@ -20,22 +20,20 @@ const localDate = () => {
 
 function PhotoUploader({ photos, onChange, testId }) {
   const { t } = useT();
-  const ref = useRef();
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const upload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const upload = async (blob) => {
     setBusy(true);
     try {
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", blob, "photo.jpg");
       const { data } = await api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
       onChange([...photos, data.path]);
     } catch (err) {
       toast.error(errMsg(err));
+      throw err;
     } finally {
       setBusy(false);
-      e.target.value = "";
     }
   };
   return (
@@ -48,11 +46,11 @@ function PhotoUploader({ photos, onChange, testId }) {
           </button>
         </div>
       ))}
-      <button type="button" onClick={() => ref.current?.click()} disabled={busy} data-testid={`${testId}-add`}
+      <button type="button" onClick={() => setOpen(true)} disabled={busy} data-testid={`${testId}-add`}
         className="flex h-16 min-w-[64px] items-center justify-center gap-1 rounded-lg border-2 border-dashed border-brand px-2 text-xs font-medium text-brand-deep transition-colors hover:bg-brand-bg">
-        <Camera className="h-4 w-4" /> {busy ? t("uploading") : t("add_photo")}
+        <Camera className="h-4 w-4" /> {busy ? t("uploading") : t("take_photo")}
       </button>
-      <input ref={ref} type="file" accept="image/*" capture="environment" className="hidden" onChange={upload} data-testid={`${testId}-input`} />
+      <CameraCapture open={open} onClose={() => setOpen(false)} onCapture={upload} testId={testId} />
     </div>
   );
 }
@@ -77,12 +75,13 @@ function ItemCard({ item, index, result, onChange }) {
           <StatusPill key={code} code={code} selected={result.status === code} onClick={() => set({ status: code })} testId={`item-${item.id}-status-${code}`} />
         ))}
       </div>
-      {isDefect && (
-        <div className="mt-3 space-y-3 rounded-xl bg-red-50/60 p-3">
+      <div className={`mt-3 space-y-3 rounded-xl p-3 ${isDefect ? "bg-red-50/60" : "bg-brand-bg/50"}`}>
+        {isDefect && (
           <Textarea value={result.note || ""} onChange={(e) => set({ note: e.target.value })} placeholder={t("findings_placeholder")} rows={2} className="bg-white" data-testid={`item-${item.id}-note`} />
-          <PhotoUploader photos={result.photos || []} onChange={(photos) => set({ photos })} testId={`item-${item.id}-photo`} />
-        </div>
-      )}
+        )}
+        {!isDefect && <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t("photo_optional")}</p>}
+        <PhotoUploader photos={result.photos || []} onChange={(photos) => set({ photos })} testId={`item-${item.id}-photo`} />
+      </div>
     </div>
   );
 }
@@ -111,11 +110,17 @@ export default function InspectionFormPage() {
   useEffect(() => {
     if (!truckId) return;
     setResults({});
-    api.get("/inspections/checklist", { params: { truck_id: truckId } }).then((r) => setChecklist(r.data)).catch((e) => toast.error(errMsg(e)));
+    api.get("/inspections/checklist", { params: { truck_id: truckId } }).then((r) => {
+      setChecklist(r.data);
+      const defaults = {};
+      r.data.groups.forEach((g) => g.items.forEach((i) => (defaults[i.id] = { status: "OK", photos: [] })));
+      setResults(defaults);
+    }).catch((e) => toast.error(errMsg(e)));
   }, [truckId]);
 
   const items = useMemo(() => (checklist?.groups || []).flatMap((g) => g.items.map((i) => ({ ...i, category_name: g.category.name }))), [checklist]);
   const done = items.filter((i) => results[i.id]?.status).length;
+  const defects = items.filter((i) => results[i.id]?.status && results[i.id].status !== "OK").length;
   const ready = truckId && kmHm !== "" && items.length > 0 && done === items.length;
 
   const submit = async () => {
@@ -144,7 +149,7 @@ export default function InspectionFormPage() {
 
   const truck = checklist?.truck;
   return (
-    <div className="fade-up mx-auto max-w-2xl pb-28" data-testid="inspection-form-page">
+    <div className="mx-auto max-w-2xl pb-28" data-testid="inspection-form-page">
       <h1 className="font-heading text-2xl font-semibold tracking-tight lg:text-3xl">{t("new_inspection")}</h1>
       <p className="mt-1 text-sm text-muted-foreground">{t("start_inspection_desc")}</p>
 
@@ -185,11 +190,12 @@ export default function InspectionFormPage() {
       {items.length > 0 && (
         <>
           <div className="sticky top-14 z-10 -mx-4 mt-5 border-y bg-white/85 px-4 py-3 backdrop-blur-xl lg:mx-0 lg:rounded-xl lg:border">
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-semibold">{t("progress")}</span>
-              <span data-testid="form-progress-text">{done}/{items.length} {t("items_done")}</span>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-xs text-muted-foreground">{t("default_ok_hint")}</span>
+              <span className={`flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${defects ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`} data-testid="form-progress-text">
+                {defects ? <AlertTriangle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />} {defects}/{items.length} {t("items_flagged")}
+              </span>
             </div>
-            <Progress value={(done / items.length) * 100} className="mt-2 h-2" />
           </div>
 
           {checklist.groups.map((g) => (
@@ -213,7 +219,7 @@ export default function InspectionFormPage() {
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-white/90 p-3 backdrop-blur-xl lg:left-64">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground"><b className="text-foreground">{done}</b>/{items.length} {t("checked").toLowerCase()}</p>
+          <p className="text-sm text-muted-foreground"><b className={defects ? "text-red-700" : "text-foreground"}>{defects}</b> {t("defects")} · {items.length} {t("items")}</p>
           <Button size="lg" className="h-12 rounded-full px-8" disabled={!ready || submitting} onClick={submit} data-testid="form-submit-btn">
             <CheckCircle2 className="mr-2 h-5 w-5" /> {submitting ? t("submitting") : t("submit_inspection")}
           </Button>

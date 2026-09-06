@@ -28,7 +28,6 @@ export default function InspectionDetailPage() {
   const [insp, setInsp] = useState(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     api.get(`/inspections/${id}`).then((r) => setInsp(r.data)).catch((e) => toast.error(errMsg(e)));
@@ -49,7 +48,6 @@ export default function InspectionDetailPage() {
 
   if (!insp) return <p className="text-sm text-muted-foreground">{t("loading")}</p>;
   const defects = insp.results.filter((r) => r.status !== "OK");
-  const shown = showAll ? insp.results : defects;
   const canApprove = user.role !== "driver";
 
   return (
@@ -92,32 +90,57 @@ export default function InspectionDetailPage() {
         </div>
       )}
 
-      <div className="rounded-2xl border bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b px-5 py-4">
-          <h2 className="font-heading text-base font-semibold md:text-lg">{showAll ? `${t("checked")} (${insp.results.length})` : `${t("defect_summary")} (${defects.length})`}</h2>
-          <Button variant="ghost" size="sm" onClick={() => setShowAll((s) => !s)} data-testid="toggle-all-items-btn">{showAll ? t("defect_summary") : t("view_all")}</Button>
-        </div>
-        <ul className="divide-y">
-          {shown.length === 0 && <li className="px-5 py-8 text-center text-sm text-muted-foreground">{t("no_defects")}</li>}
-          {shown.map((r, i) => (
-            <li key={r.item_id + i} className="px-5 py-3" data-testid={`result-${r.item_id}`}>
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-medium">{r.item_name}</p>
-                <StatusBadge code={r.status} />
-              </div>
-              {r.note && <p className="mt-1 text-sm text-muted-foreground">{r.note}</p>}
-              {r.photos?.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {r.photos.map((p) => (
-                    <a key={p} href={fileUrl(p)} target="_blank" rel="noreferrer" className="block h-20 w-20 overflow-hidden rounded-lg border">
-                      <img src={fileUrl(p)} alt="finding" className="h-full w-full object-cover" />
-                    </a>
-                  ))}
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+      {insp.photos_purged_at && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" data-testid="photos-purged-notice">{t("photos_purged")}</p>
+      )}
+
+      <ResultTable title={`${t("defect_items")} (${defects.length})`} rows={defects} emptyText={t("no_defects")} testId="defect-table" withIndex={false} />
+      <ResultTable title={`${t("all_items")} (${insp.results.length})`} rows={insp.results} testId="all-items-table" withIndex />
+    </div>
+  );
+}
+
+function ResultTable({ title, rows, emptyText, testId, withIndex }) {
+  const { t } = useT();
+  return (
+    <div className="rounded-2xl border bg-white shadow-sm" data-testid={testId}>
+      <div className="border-b px-5 py-4">
+        <h2 className="font-heading text-base font-semibold md:text-lg">{title}</h2>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-muted/60 text-left text-xs font-semibold uppercase tracking-wide">
+              {withIndex && <th className="w-12 px-4 py-2">#</th>}
+              <th className="px-4 py-2">{t("name")}</th>
+              <th className="px-4 py-2">{t("status")}</th>
+              <th className="px-4 py-2">{t("findings_note")}</th>
+              <th className="px-4 py-2">{t("photos")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && <tr><td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">{emptyText || t("no_data")}</td></tr>}
+            {rows.map((r, i) => (
+              <tr key={r.item_id + i} className="border-t align-top" data-testid={`${testId}-row-${r.item_id}`}>
+                {withIndex && <td className="px-4 py-2 text-muted-foreground">{i + 1}</td>}
+                <td className="px-4 py-2 font-medium">{r.item_name}{r.category_name && <span className="block text-xs font-normal text-muted-foreground">{r.category_name}</span>}</td>
+                <td className="px-4 py-2"><StatusBadge code={r.status} /></td>
+                <td className="px-4 py-2 text-muted-foreground">{r.note || "—"}</td>
+                <td className="px-4 py-2">
+                  {r.photos?.length ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {r.photos.map((p) => (
+                        <a key={p} href={fileUrl(p)} target="_blank" rel="noreferrer" className="block h-12 w-12 overflow-hidden rounded-md border">
+                          <img src={fileUrl(p)} alt="finding" className="h-full w-full object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

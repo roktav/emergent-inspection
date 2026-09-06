@@ -5,6 +5,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 import csv
+import hmac
 import io
 import logging
 import os
@@ -13,7 +14,7 @@ from datetime import datetime, timezone, timedelta, date
 from typing import Annotated, List, Literal, Optional
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
@@ -32,6 +33,7 @@ api_router = APIRouter(prefix="/api")
 
 ADMIN_ROLES = ("admin", "superadmin")
 ALL_ROLES = ("admin", "superadmin", "driver")
+MAX_PHOTO_BYTES = 500 * 1024
 
 
 # ---------- Models ----------
@@ -169,6 +171,8 @@ class Inspection(BaseDocument):
     approved_at: Optional[str] = None
     admin_note: Optional[str] = None
     general_note: Optional[str] = None
+    photos_purged_at: Optional[str] = None
+    purged_photo_count: int = 0
 
 
 class ApprovalIn(BaseModel):
@@ -642,8 +646,8 @@ async def upload(file: UploadFile = File(...), user: dict = Depends(require_role
     if not (file.content_type or "").startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image files are allowed")
     data = await file.read()
-    if len(data) > 8 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Image too large (max 8MB)")
+    if len(data) > MAX_PHOTO_BYTES:
+        raise HTTPException(status_code=400, detail="Image too large (max 500KB)")
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "jpg"
     path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
     try:
@@ -674,6 +678,61 @@ async def download(path: str, user: dict = Depends(get_current_user)):
 @api_router.get("/")
 async def root():
     return {"message": "DT Inspection API", "status": "ok"}
+
+
+# ---------- Photo retention ----------
+async def purge_old_photos(run_id: str) -> dict:
+    days = int(os.environ.get("PHOTO_RETENTION_DAYS", "90"))
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    cursor = db.inspections.find(
+        {"completed_at": {"$lt": cutoff}, "photos_purged_at": None, "results.photos.0": {"$exists": True}},
+        {"results.photos": 1})
+    purged_files = purged_inspections = 0
+    async for insp in cursor:
+        paths = [p for r in insp.get("results", []) for p in (r.get("photos") or [])]
+        for p in paths:
+            try:
+                put_object(p, b"", "application/octet-stream")
+            except Exception as e:
+                logger.warning(f"Purge overwrite failed for {p}: {e}")
+            await db.files.update_one({"storage_path": p}, {"$set": {"is_deleted": True, "deleted_at": now_iso()}})
+            purged_files += 1
+        await db.inspections.update_one({"_id": insp["_id"]}, {
+            "$set": {"results.$[].photos": [], "photos_purged_at": now_iso(), "purged_photo_count": len(paths)}})
+        purged_inspections += 1
+    summary = {"run_id": run_id, "cutoff": cutoff, "inspections": purged_inspections, "photos": purged_files,
+               "finished_at": now_iso()}
+    await db.cron_runs.update_one({"_id": run_id}, {"$set": {"status": "done", **summary}})
+    logger.info(f"Photo purge done: {summary}")
+    return summary
+
+
+@api_router.post("/cron/purge-photos")
+async def cron_purge_photos(request: Request, background: BackgroundTasks):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    header = request.headers.get("Authorization", "")
+    expected = os.environ.get("WEBHOOK_CRON_SECRET", "")
+    if not header.startswith("Bearer ") or not expected or not hmac.compare_digest(header[7:], expected):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        body = await request.json() if await request.body() else {}
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid body")
+    run_id = request.headers.get("X-Webhook-Id") or (body or {}).get("run_id") or str(uuid.uuid4())
+    existing = await db.cron_runs.find_one({"_id": run_id})
+    if existing:
+        return {"accepted": True, "duplicate": True, "run_id": run_id}
+    await db.cron_runs.insert_one({"_id": run_id, "job": "purge-photos", "status": "queued", "queued_at": now_iso()})
+    background.add_task(purge_old_photos, run_id)
+    return {"accepted": True, "run_id": run_id}
+
+
+@api_router.post("/maintenance/purge-photos")
+async def manual_purge_photos(user: dict = Depends(require_roles("superadmin"))):
+    run_id = f"manual-{uuid.uuid4()}"
+    await db.cron_runs.insert_one({"_id": run_id, "job": "purge-photos", "status": "running", "queued_at": now_iso(),
+                                   "triggered_by": user["id"]})
+    return await purge_old_photos(run_id)
 
 
 app.include_router(api_router)

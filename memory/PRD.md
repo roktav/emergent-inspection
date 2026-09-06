@@ -40,7 +40,8 @@ Build a daily inspection application for the Driver inspecting the Dump Trucks (
 - [x] Dashboard stats + recent inspections
 - [x] EN/ID toggle, ITI branding
 - [x] Tested: 28/28 backend, all frontend flows pass (test_reports/iteration_1.json)
-- [x] Revision 1 (2026-06): Items = category/name/guidance/status options/active; Categories own an ordered `item_ids` list (assign/unassign/reorder dialog); Trucks = VIN* / Hull Number* (report identifier) / plate / brand / model / drivetrain layout + ordered `category_ids` (assign dialog). ICE/EV type removed — EV trucks get "EV Components" category. Checklist = truck categories in order → items in order. Reports/lists show hull number + VIN. Tested 23/23 backend + frontend 100% (iteration_2.json)
+- [x] Revision 1 (2026-06): Items = category/name/guidance/status options/active; Categories own ordered item_ids; Trucks = VIN*/Hull* + drivetrain + ordered category_ids (iteration_2.json)
+- [x] Revision 2 (2026-06): Inspection form defaults every item to OK; photo allowed on any item; camera-only capture (getUserMedia overlay, `<input capture>` fallback) with client-side compression <500 KB (server enforces 500 KB); detail page shows defect table + separate all-items table; photo retention: `.emergent/crons.yml` → POST /api/cron/purge-photos daily 02:00 UTC (bearer WEBHOOK_CRON_SECRET, idempotent by run_id) purges photos on inspections >90 days (PHOTO_RETENTION_DAYS) — storage overwritten w/ 0 bytes, files soft-deleted, record kept with `photos_purged_at`; superadmin manual trigger POST /api/maintenance/purge-photos. Tested 33/33 backend + frontend 100% (iteration_3.json)
 
 ## Backlog
 - P1: Driver signature pad / mechanic sign-off; PDF export of a single inspection
