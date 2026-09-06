@@ -1,0 +1,111 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        --background: 220 60% 96%;
+        --foreground: 17 25% 11%;
+        --card: 0 0% 100%;
+        --card-foreground: 17 25% 11%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 17 25% 11%;
+        --primary: 228 40% 56%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 250 34% 87%;
+        --secondary-foreground: 17 25% 11%;
+        --muted: 225 35% 93%;
+        --muted-foreground: 225 12% 42%;
+        --accent: 225 42% 72%;
+        --accent-foreground: 17 25% 11%;
+        --destructive: 0 72% 51%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 225 30% 86%;
+        --input: 225 30% 84%;
+        --ring: 225 42% 72%;
+        --radius: 0.75rem;
+    }
+    * {
+        @apply border-border;
+    }
+    html {
+        font-family: 'Roboto', system-ui, sans-serif;
+    }
+    body {
+        @apply bg-background text-foreground;
+        margin: 0;
+        -webkit-font-smoothing: antialiased;
+    }
+    h1, h2, h3, h4, .font-heading {
+        font-family: 'Poppins', 'Roboto', sans-serif;
+    }
+    ::selection {
+        background: #98A7D5;
+        color: #231915;
+    }
+}
+
+@layer components {
+    .brand-panel {
+        background-color: #98A7D5;
+        background-image:
+            radial-gradient(circle at 20% 20%, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.18) 60px, transparent 61px),
+            radial-gradient(circle at 20% 45%, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.18) 60px, transparent 61px),
+            radial-gradient(circle at 20% 70%, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.18) 60px, transparent 61px),
+            radial-gradient(circle at 45% 20%, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.18) 60px, transparent 61px),
+            radial-gradient(circle at 45% 45%, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.18) 60px, transparent 61px),
+            radial-gradient(circle at 45% 70%, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.18) 60px, transparent 61px),
+            radial-gradient(circle at 70% 20%, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.18) 60px, transparent 61px),
+            radial-gradient(circle at 70% 45%, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.18) 60px, transparent 61px),
+            radial-gradient(circle at 70% 70%, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.18) 60px, transparent 61px);
+    }
+    .dot-grid {
+        background-image: radial-gradient(rgba(35,25,21,0.08) 1px, transparent 1px);
+        background-size: 18px 18px;
+    }
+    .status-pill {
+        @apply inline-flex items-center justify-center rounded-full border px-3 min-h-[44px] text-sm font-medium select-none;
+        transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    }
+    .status-pill:active {
+        transform: scale(0.96);
+    }
+    .status-pill[data-selected="true"] {
+        transform: scale(1.04);
+        box-shadow: 0 0 0 3px rgba(152, 167, 213, 0.35);
+    }
+    .nav-link {
+        @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#4a4550];
+        transition: background-color 150ms ease, color 150ms ease;
+    }
+    .nav-link:hover {
+        @apply bg-[#EEF2FA] text-[#231915];
+    }
+    .nav-link[data-active="true"] {
+        @apply bg-[#98A7D5]/25 text-[#231915];
+    }
+    .fade-up {
+        animation: fadeUp 380ms ease both;
+    }
+    @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .recap-table th, .recap-table td {
+        @apply whitespace-nowrap;
+    }
+    .recap-table thead th {
+        position: sticky; top: 0; z-index: 2; background: #fff;
+    }
+    .recap-table th:first-child, .recap-table td:first-child {
+        position: sticky; left: 0; z-index: 3; background: #fff;
+        box-shadow: 1px 0 0 hsl(var(--border));
+    }
+}
+
+@layer base {
+    [data-debug-wrapper="true"] {
+        display: contents !important;
+    }
+}

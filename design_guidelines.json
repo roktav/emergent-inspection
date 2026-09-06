@@ -1,0 +1,93 @@
+{
+  "theme": "Light theme default for high-visibility field operations, with a bilingual (EN/ID) toggle.",
+  "typography": {
+    "primary_font": "Poppins (Headings and emphasized text)",
+    "secondary_font": "Roboto (Body text, data tables, and input fields)",
+    "rules": [
+      "Use Poppins with tracking-tight for large headings.",
+      "Never use Inter or default Vercel fonts for headings.",
+      "Maintain tight line-height for headings and relaxed for body text."
+    ]
+  },
+  "colors": {
+    "brand_primary": "#98A7D5",
+    "brand_secondary": "#D6D2E9",
+    "text_dark": "#231915",
+    "background_light": "#EEF2FA",
+    "status_pills": {
+      "ok": "bg-green-100 text-green-800 border-green-300 hover:bg-green-200",
+      "not_ok": "bg-red-100 text-red-800 border-red-300 hover:bg-red-200",
+      "korosi": "bg-orange-100 text-orange-800 border-orange-300 hover:bg-orange-200",
+      "kurang": "bg-yellow-100 text-yellow-800 border-yellow-300 hover:bg-yellow-200",
+      "longgar": "bg-slate-200 text-slate-800 border-slate-300 hover:bg-slate-300"
+    },
+    "guidance": "Avoid pure white for main app backgrounds; use #EEF2FA. Use #98A7D5 for primary buttons and active states. Status colors must be accessible."
+  },
+  "visual_enhancers": [
+    "Subtle 1px borders with shadow-sm for cards instead of deep shadows.",
+    "Use large faded dot-grid logomark (opacity-10) in the background of full-bleed periwinkle header sections.",
+    "Bento grid for dashboard summary widgets."
+  ],
+  "layouts": {
+    "dashboard_admin": "Sidebar navigation (collapsible). Dense data tables with horizontal scroll. Grid-cols-4 or grid-cols-12 based bento layouts for stats.",
+    "mobile_inspection_form": "Single-column mobile-first flow. Large tap targets (min 44px) for field workers. Sticky bottom submit bar. 37 items should be split by category or use a scrollspy/progress indicator."
+  },
+  "components": {
+    "status_pill_group": "A customized radio group behaving like segmented controls. Touch-friendly.",
+    "photo_upload": "Camera-first area with large dashed border. Must show thumbnail upon capture.",
+    "recap_matrix": "Matrix table with sticky first column (Truck ID) and sticky header (Dates). Use Shadcn Table but customize for horizontal overflow.",
+    "data_table": "Shadcn Table customized with dense spacing for admin dashboard."
+  },
+  "motion": [
+    "Micro-interactions on status pill selection (scale up slightly).",
+    "Smooth transition for language toggle EN/ID.",
+    "Avoid heavy animations for field app; prioritize performance."
+  ],
+  "accessibility": [
+    "Minimum 44x44px touch targets for mobile form.",
+    "High contrast ratios (3:1 minimum) for all text and status pills.",
+    "All interactive elements MUST have a data-testid attribute in kebab-case."
+  ],
+  "media": {
+    "image_urls": [
+      {
+        "url": "/app/refs/logo_full.png",
+        "description": "Primary logo (Light Background)",
+        "category": "header, login, sidebar"
+      },
+      {
+        "url": "/app/refs/logo_dark.png",
+        "description": "Primary logo (Dark Background)",
+        "category": "dark sections"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1622645636770-11fbf0611463?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTV8MHwxfHNlYXJjaHwyfHxkdW1wJTIwdHJ1Y2slMjBtaW5pbmclMjBzaXRlfGVufDB8fHx8MTc4ODY2NDk1MXww&ixlib=rb-4.1.0&q=85",
+        "description": "Dump truck in mining site",
+        "category": "auth_background, placeholder_hero"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1625047509248-ec889cbff17f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwyfHxtZWNoYW5pYyUyMGluc3BlY3RpbmclMjB2ZWhpY2xlfGVufDB8fHx8MTc4ODY2NDk1MXww&ixlib=rb-4.1.0&q=85",
+        "description": "Mechanic inspecting vehicle",
+        "category": "onboarding, empty_state"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Use ONLY .js files for React components. DO NOT create .tsx files.",
+    "Always apply 'data-testid' to interactive elements (e.g., data-testid='login-submit-btn').",
+    "Use 'lucide-react' for all icons.",
+    "NEVER use transparent backgrounds for dropdowns or floating elements. Apply backdrop-blur-xl or solid bg with border.",
+    "Implement Shadcn UI for forms, dialogs, and tables. Ensure no default Vercel styles.",
+    "Add 'sonner' for toast notifications, configured to match the brand colors.",
+    "The Inspection form MUST be single-column and optimized for mobile, with fixed header/footer for navigation."
+  ],
+  "universal_guidelines": {
+    "rules": [
+      "No generic centered layouts. Use optical alignment.",
+      "Implement deep layered designs using z-index hierarchy and glassmorphism.",
+      "Avoid universal 'transition: all'. Apply specific transitions.",
+      "Include a visible EN/ID language toggle in the nav bar.",
+      "Dashboard tables must allow exporting via CSV."
+    ]
+  }
+}
