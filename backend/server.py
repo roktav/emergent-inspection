@@ -127,6 +127,15 @@ class InspectionItem(BaseDocument):
     is_active: bool = True
 
 
+class InspectionType(BaseDocument):
+    company_id: Optional[str] = None
+    site_id: Optional[str] = None
+    name: str
+    code: Optional[str] = None
+    description: Optional[str] = None
+    is_active: bool = True
+
+
 class IdList(BaseModel):
     ids: List[str]
 
@@ -142,6 +151,7 @@ class ItemResult(BaseModel):
 
 class InspectionCreate(BaseModel):
     truck_id: str
+    inspection_type_id: str
     km_hm: float
     started_at: datetime
     inspection_date: Optional[str] = None
@@ -155,6 +165,8 @@ class Inspection(BaseDocument):
     truck_id: str
     truck_hull_number: str
     truck_vin_number: Optional[str] = None
+    inspection_type_id: Optional[str] = None
+    inspection_type_name: Optional[str] = None
     driver_id: str
     driver_name: str
     km_hm: float
@@ -433,6 +445,7 @@ def register_master(path: str, coll: str, Model, sort_key: str):
 register_master("trucks", "dump_trucks", DumpTruck, "hull_number")
 register_master("categories", "inspection_categories", InspectionCategory, "name")
 register_master("items", "inspection_items", InspectionItem, "name")
+register_master("inspection-types", "inspection_types", InspectionType, "name")
 
 
 @api_router.put("/categories/{id_}/items")
@@ -490,13 +503,17 @@ async def checklist(truck_id: str, user: dict = Depends(require_roles(*ALL_ROLES
 @api_router.post("/inspections")
 async def create_inspection(body: InspectionCreate, user: dict = Depends(require_roles(*ALL_ROLES))):
     truck = await find_or_404("dump_trucks", body.truck_id, scope_filter(user))
+    itype = await db.inspection_types.find_one({"_id": oid(body.inspection_type_id), "site_id": truck["site_id"], "is_active": True})
+    if not itype:
+        raise HTTPException(status_code=400, detail="Invalid inspection type")
     if not body.results:
         raise HTTPException(status_code=400, detail="No inspection results")
     completed = datetime.now(timezone.utc)
     defects = sum(1 for r in body.results if r.status != "OK")
     insp = Inspection(
         company_id=truck.get("company_id"), site_id=truck["site_id"], truck_id=body.truck_id,
-        truck_hull_number=truck["hull_number"], truck_vin_number=truck.get("unit_vin_number"), driver_id=user["id"],
+        truck_hull_number=truck["hull_number"], truck_vin_number=truck.get("unit_vin_number"),
+        inspection_type_id=body.inspection_type_id, inspection_type_name=itype["name"], driver_id=user["id"],
         driver_name=user["name"], km_hm=body.km_hm, started_at=body.started_at.astimezone(timezone.utc).isoformat(),
         completed_at=completed.isoformat(), inspection_date=body.inspection_date or completed.date().isoformat(),
         results=body.results, total_items=len(body.results), defect_count=defects, has_defect=defects > 0,

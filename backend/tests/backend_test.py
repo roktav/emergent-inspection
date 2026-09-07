@@ -30,6 +30,11 @@ def _auth(token):
     return {"Authorization": f"Bearer {token}"}
 
 
+def _type_id(token):
+    types = requests.get(f"{API}/inspection-types", headers=_auth(token)).json()
+    return next(t["id"] for t in types if t["is_active"])
+
+
 def _tiny_png_bytes():
     sig = b"\x89PNG\r\n\x1a\n"
     def chunk(t, d):
@@ -312,6 +317,7 @@ class TestInspection:
         payload = {"truck_id": truck["id"], "km_hm": 5000.0,
                    "started_at": datetime.now(timezone.utc).isoformat(),
                    "inspection_date": datetime.now(timezone.utc).date().isoformat(),
+                   "inspection_type_id": _type_id(driver_ctx["token"]),
                    "results": results}
         r = requests.post(f"{API}/inspections", json=payload, headers=_auth(driver_ctx["token"]))
         assert r.status_code == 200, r.text
@@ -528,6 +534,7 @@ class TestPurgeEndToEnd:
         payload = {"truck_id": truck["id"], "km_hm": 1234.0,
                    "started_at": datetime.now(timezone.utc).isoformat(),
                    "inspection_date": datetime.now(timezone.utc).date().isoformat(),
+                   "inspection_type_id": _type_id(driver_ctx["token"]),
                    "results": results}
         r = requests.post(f"{API}/inspections", json=payload, headers=_auth(driver_ctx["token"]))
         assert r.status_code == 200, r.text
@@ -591,6 +598,7 @@ class TestPurgeEndToEnd:
         payload = {"truck_id": truck["id"], "km_hm": 99.0,
                    "started_at": datetime.now(timezone.utc).isoformat(),
                    "inspection_date": datetime.now(timezone.utc).date().isoformat(),
+                   "inspection_type_id": _type_id(driver_ctx["token"]),
                    "results": results}
         r = requests.post(f"{API}/inspections", json=payload, headers=_auth(driver_ctx["token"]))
         assert r.status_code == 200
@@ -602,3 +610,134 @@ class TestPurgeEndToEnd:
         insp = r.json()
         assert insp.get("photos_purged_at") is None
         assert insp["results"][0]["photos"] == [photo_path]
+
+
+
+# ---------- Inspection Types (new master iteration 4) ----------
+class TestInspectionTypes:
+    def test_admin_list_has_seeded_types(self, admin_ctx):
+        r = requests.get(f"{API}/inspection-types", headers=_auth(admin_ctx["token"]))
+        assert r.status_code == 200
+        types = r.json()
+        active = [t for t in types if t.get("is_active")]
+        names = {t["name"] for t in active}
+        for n in ("Daily Inspection (P2H)", "Weekly Inspection", "Pre-Delivery Inspection"):
+            assert n in names, f"missing seeded type {n}"
+        # ensure no mongo _id leaks
+        for t in types:
+            assert "_id" not in t
+            assert "id" in t
+
+    def test_admin_crud(self, admin_ctx):
+        tok = admin_ctx["token"]
+        payload = {"name": "TEST_Type_A", "code": "TSTA", "description": "test create"}
+        r = requests.post(f"{API}/inspection-types", json=payload, headers=_auth(tok))
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["name"] == "TEST_Type_A" and d["code"] == "TSTA"
+        tid = d["id"]
+        try:
+            r2 = requests.put(f"{API}/inspection-types/{tid}",
+                              json={"name": "TEST_Type_A2", "code": "TSTA", "description": "u"},
+                              headers=_auth(tok))
+            assert r2.status_code == 200 and r2.json()["name"] == "TEST_Type_A2"
+            # verify persistence via GET list
+            r3 = requests.get(f"{API}/inspection-types", headers=_auth(tok)).json()
+            assert any(t["id"] == tid and t["name"] == "TEST_Type_A2" for t in r3)
+        finally:
+            rd = requests.delete(f"{API}/inspection-types/{tid}", headers=_auth(tok))
+            assert rd.status_code == 200
+        # verify deletion
+        r4 = requests.get(f"{API}/inspection-types", headers=_auth(tok)).json()
+        assert not any(t["id"] == tid for t in r4)
+
+    def test_driver_post_forbidden(self, driver_ctx):
+        r = requests.post(f"{API}/inspection-types",
+                          json={"name": "TEST_x", "code": "X"},
+                          headers=_auth(driver_ctx["token"]))
+        assert r.status_code == 403
+
+    def test_superadmin_needs_site_id(self, super_ctx, admin_ctx):
+        # site_id missing -> 400
+        r = requests.post(f"{API}/inspection-types",
+                          json={"name": "TEST_SA_no_site", "code": "SANS"},
+                          headers=_auth(super_ctx["token"]))
+        assert r.status_code == 400
+        # discover admin's site id via /auth/me
+        me = requests.get(f"{API}/auth/me", headers=_auth(admin_ctx["token"])).json()
+        site_id = me["site_id"]
+        r2 = requests.post(f"{API}/inspection-types",
+                           json={"name": "TEST_SA_ok", "code": "SAOK", "site_id": site_id},
+                           headers=_auth(super_ctx["token"]))
+        assert r2.status_code == 200, r2.text
+        tid = r2.json()["id"]
+        # superadmin can list with ?site_id
+        r3 = requests.get(f"{API}/inspection-types?site_id={site_id}",
+                          headers=_auth(super_ctx["token"]))
+        assert r3.status_code == 200
+        assert any(t["id"] == tid for t in r3.json())
+        # cleanup
+        requests.delete(f"{API}/inspection-types/{tid}", headers=_auth(super_ctx["token"]))
+
+
+# ---------- Inspection create with inspection_type_id ----------
+class TestInspectionTypeValidation:
+    def _base_payload(self, driver_ctx, admin_ctx, hull="DT-003"):
+        trucks = requests.get(f"{API}/trucks", headers=_auth(admin_ctx["token"])).json()
+        truck = next(t for t in trucks if t["hull_number"] == hull)
+        cl = requests.get(f"{API}/inspections/checklist?truck_id={truck['id']}",
+                          headers=_auth(driver_ctx["token"])).json()
+        items = [i for g in cl["groups"] for i in g["items"]]
+        results = [{"item_id": it["id"], "item_name": it["name"], "status": "OK", "note": None, "photos": []}
+                   for it in items]
+        return {"truck_id": truck["id"], "km_hm": 100.0,
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "inspection_date": datetime.now(timezone.utc).date().isoformat(),
+                "results": results}
+
+    def test_missing_type_id_422(self, driver_ctx, admin_ctx):
+        p = self._base_payload(driver_ctx, admin_ctx)
+        r = requests.post(f"{API}/inspections", json=p, headers=_auth(driver_ctx["token"]))
+        assert r.status_code == 422, r.text
+
+    def test_bogus_type_id_400(self, driver_ctx, admin_ctx):
+        p = self._base_payload(driver_ctx, admin_ctx)
+        p["inspection_type_id"] = "507f1f77bcf86cd799439011"
+        r = requests.post(f"{API}/inspections", json=p, headers=_auth(driver_ctx["token"]))
+        assert r.status_code == 400
+        assert "Invalid inspection type" in r.text
+
+    def test_inactive_type_400(self, driver_ctx, admin_ctx):
+        # Create a type, deactivate, use it
+        tok = admin_ctx["token"]
+        r = requests.post(f"{API}/inspection-types",
+                          json={"name": "TEST_Inactive", "code": "INA", "is_active": False},
+                          headers=_auth(tok))
+        assert r.status_code == 200
+        tid = r.json()["id"]
+        try:
+            p = self._base_payload(driver_ctx, admin_ctx)
+            p["inspection_type_id"] = tid
+            r2 = requests.post(f"{API}/inspections", json=p, headers=_auth(driver_ctx["token"]))
+            assert r2.status_code == 400
+        finally:
+            requests.delete(f"{API}/inspection-types/{tid}", headers=_auth(tok))
+
+    def test_valid_type_stores_id_and_name(self, driver_ctx, admin_ctx):
+        p = self._base_payload(driver_ctx, admin_ctx)
+        tid = _type_id(driver_ctx["token"])
+        p["inspection_type_id"] = tid
+        r = requests.post(f"{API}/inspections", json=p, headers=_auth(driver_ctx["token"]))
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["inspection_type_id"] == tid
+        assert d["inspection_type_name"]
+        iid = d["id"]
+        # List includes type name
+        lst = requests.get(f"{API}/inspections", headers=_auth(driver_ctx["token"])).json()
+        row = next(i for i in lst if i["id"] == iid)
+        assert row.get("inspection_type_name") == d["inspection_type_name"]
+        # Detail includes it
+        det = requests.get(f"{API}/inspections/{iid}", headers=_auth(driver_ctx["token"])).json()
+        assert det["inspection_type_id"] == tid
+        assert det["inspection_type_name"] == d["inspection_type_name"]

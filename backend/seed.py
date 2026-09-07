@@ -60,6 +60,12 @@ TRUCKS = [
 
 SCHEMA_VERSION = 2
 
+INSPECTION_TYPES = [
+    ("Daily Inspection (P2H)", "P2H", "Pemeriksaan harian sebelum operasi"),
+    ("Weekly Inspection", "WEEKLY", "Pemeriksaan mingguan"),
+    ("Pre-Delivery Inspection", "PDI", "Pemeriksaan sebelum unit diserahterimakan"),
+]
+
 
 async def upsert_user(email, name, role, password, company_id=None, site_id=None):
     email = email.lower()
@@ -132,6 +138,19 @@ async def seed_all():
         else:
             cat_ids[name] = str(cat["_id"])
 
+    type_ids = {}
+    for name, code, desc in INSPECTION_TYPES:
+        it = await db.inspection_types.find_one({"site_id": site_id, "name": name})
+        if not it:
+            res = await db.inspection_types.insert_one({"company_id": company_id, "site_id": site_id, "name": name,
+                                                        "code": code, "description": desc, "is_active": True})
+            type_ids[name] = str(res.inserted_id)
+        else:
+            type_ids[name] = str(it["_id"])
+    daily_type = INSPECTION_TYPES[0][0]
+    await db.inspections.update_many({"site_id": site_id, "inspection_type_id": {"$in": [None, ""]}},
+                                     {"$set": {"inspection_type_id": type_ids[daily_type], "inspection_type_name": daily_type}})
+
     truck_ids = []
     for vin, hull, brand, model, layout, is_ev in TRUCKS:
         t = await db.dump_trucks.find_one({"site_id": site_id, "hull_number": hull})
@@ -169,7 +188,8 @@ async def seed_all():
                 approved = rng.random() < 0.7
                 await db.inspections.insert_one({
                     "company_id": company_id, "site_id": site_id, "truck_id": tid, "truck_hull_number": hull,
-                    "truck_vin_number": vin, "driver_id": driver_id, "driver_name": "Rizal Ramli",
+                    "truck_vin_number": vin, "inspection_type_id": type_ids[daily_type], "inspection_type_name": daily_type,
+                    "driver_id": driver_id, "driver_name": "Rizal Ramli",
                     "km_hm": 12000 + day_offset * 85 + rng.randint(0, 40), "started_at": start.isoformat(),
                     "completed_at": end.isoformat(), "inspection_date": d.isoformat(), "results": results,
                     "total_items": len(results), "defect_count": defects, "has_defect": defects > 0,

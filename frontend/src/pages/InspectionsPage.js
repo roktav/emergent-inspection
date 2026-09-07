@@ -63,20 +63,21 @@ export default function InspectionsPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/60">
-                {["date", "unit", "driver_name", "km_hm", "checked", "defects", "status", "approved_by", ""].map((h, i) => (
+                {["date", "unit", "inspection_type", "driver_name", "km_hm", "checked", "defects", "status", "approved_by", ""].map((h, i) => (
                   <TableHead key={i} className="text-xs font-semibold uppercase tracking-wide">{h ? t(h) : ""}</TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={9} className="py-10 text-center text-muted-foreground">{t("loading")}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="py-10 text-center text-muted-foreground">{t("loading")}</TableCell></TableRow>
               ) : rows.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="py-10 text-center text-muted-foreground" data-testid="inspections-empty">{t("no_data")}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="py-10 text-center text-muted-foreground" data-testid="inspections-empty">{t("no_data")}</TableCell></TableRow>
               ) : rows.map((r) => (
                 <TableRow key={r.id} data-testid={`inspection-row-${r.id}`} className="hover:bg-brand-bg/60">
                   <TableCell className="text-sm">{r.inspection_date}</TableCell>
                   <TableCell className="text-sm font-semibold">{r.truck_hull_number} <span className="font-mono text-xs font-normal text-muted-foreground">{r.truck_vin_number}</span></TableCell>
+                  <TableCell className="text-sm" data-testid={`inspection-type-${r.id}`}>{r.inspection_type_name || "—"}</TableCell>
                   <TableCell className="text-sm">{r.driver_name}</TableCell>
                   <TableCell className="text-sm">{r.km_hm}</TableCell>
                   <TableCell className="text-sm">{r.total_items}</TableCell>

@@ -10,7 +10,7 @@ import InspectionsPage from "./pages/InspectionsPage";
 import InspectionFormPage from "./pages/InspectionFormPage";
 import InspectionDetailPage from "./pages/InspectionDetailPage";
 import RecapPage from "./pages/RecapPage";
-import { CategoriesPage, CompaniesPage, ItemsPage, SitesPage, TrucksPage, UsersPage } from "./pages/MasterPages";
+import { CategoriesPage, CompaniesPage, InspectionTypesPage, ItemsPage, SitesPage, TrucksPage, UsersPage } from "./pages/MasterPages";
 
 function Protected({ roles }) {
   const { user } = useAuth();
@@ -51,6 +51,7 @@ export default function App() {
                   <Route path="/trucks" element={<TrucksPage />} />
                   <Route path="/categories" element={<CategoriesPage />} />
                   <Route path="/items" element={<ItemsPage />} />
+                  <Route path="/inspection-types" element={<InspectionTypesPage />} />
                   <Route path="/recap" element={<RecapPage />} />
                 </Route>
               </Route>

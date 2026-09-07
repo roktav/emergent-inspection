@@ -2,7 +2,7 @@ import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Building2, MapPin, Users, Truck, Layers, ListChecks, ClipboardCheck, PlusCircle,
-  BarChart3, LayoutDashboard, LogOut, Menu, X,
+  BarChart3, LayoutDashboard, LogOut, Menu, X, Tags,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useT } from "../lib/i18n";
@@ -20,6 +20,7 @@ const NAV = [
       { to: "/trucks", key: "dump_trucks", icon: Truck, roles: ["superadmin", "admin"] },
       { to: "/categories", key: "inspection_categories", icon: Layers, roles: ["superadmin", "admin"] },
       { to: "/items", key: "inspection_items", icon: ListChecks, roles: ["superadmin", "admin"] },
+      { to: "/inspection-types", key: "inspection_types", icon: Tags, roles: ["superadmin", "admin"] },
     ],
   },
   {
