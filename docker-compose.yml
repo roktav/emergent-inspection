@@ -1,0 +1,39 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: inspection-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    # Not published to the host -- only reachable by other containers on this
+    # compose network (backend talks to it as "mongo:27017").
+
+  backend:
+    build:
+      context: ./backend
+    container_name: inspection-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - STORAGE_ROOT=/data/uploads
+    volumes:
+      - uploads_data:/data/uploads
+    depends_on:
+      - mongo
+    ports:
+      - "8801:8000"   # loopback-only; Caddy proxies to this port
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_BACKEND_URL: https://inspection.inlinetechint.org
+    container_name: inspection-frontend
+    restart: unless-stopped
+    ports:
+      - "8802:80"    # loopback-only; Caddy proxies to this port
+
+volumes:
+  mongo_data:
+  uploads_data:
