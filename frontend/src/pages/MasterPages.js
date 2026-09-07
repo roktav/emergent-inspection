@@ -220,6 +220,32 @@ export function CategoriesPage() {
   );
 }
 
+export function InspectionTypesPage() {
+  const { isSuper, sites, siteId, setSiteId } = useSiteScope();
+  return (
+    <MasterPage
+      titleKey="inspection_types"
+      endpoint="/inspection-types"
+      testPrefix="inspection-types"
+      query={isSuper ? { site_id: siteId } : undefined}
+      defaults={isSuper ? { site_id: siteId } : {}}
+      headerExtra={isSuper ? <SiteSelect value={siteId} onChange={setSiteId} sites={sites} /> : null}
+      columns={[
+        { key: "name", label: "name", render: (r) => <span className="font-semibold">{r.name}</span> },
+        { key: "code", label: "code", render: (r) => r.code ? <Badge variant="secondary" className="font-mono">{r.code}</Badge> : "—" },
+        { key: "description", label: "description" },
+        { key: "is_active", label: "status" },
+      ]}
+      fields={[
+        { key: "name", label: "name", required: true },
+        { key: "code", label: "code" },
+        { key: "description", label: "description", type: "textarea" },
+        { key: "is_active", label: "is_active", type: "switch" },
+      ]}
+    />
+  );
+}
+
 export function ItemsPage() {
   const { t } = useT();
   const { isSuper, sites, siteId, setSiteId } = useSiteScope();

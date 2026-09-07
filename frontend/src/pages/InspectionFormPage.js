@@ -92,7 +92,9 @@ export default function InspectionFormPage() {
   const navigate = useNavigate();
   const { isSuper, sites, siteId, setSiteId } = useSiteScope();
   const [trucks, setTrucks] = useState([]);
+  const [types, setTypes] = useState([]);
   const [truckId, setTruckId] = useState("");
+  const [typeId, setTypeId] = useState("");
   const [checklist, setChecklist] = useState(null);
   const [kmHm, setKmHm] = useState("");
   const [results, setResults] = useState({});
@@ -103,7 +105,9 @@ export default function InspectionFormPage() {
   useEffect(() => {
     if (isSuper && !siteId) return;
     api.get("/trucks", { params: isSuper ? { site_id: siteId } : {} }).then((r) => setTrucks(r.data.filter((x) => x.is_active)));
+    api.get("/inspection-types", { params: isSuper ? { site_id: siteId } : {} }).then((r) => setTypes(r.data.filter((x) => x.is_active)));
     setTruckId("");
+    setTypeId("");
     setChecklist(null);
   }, [isSuper, siteId]);
 
@@ -121,7 +125,7 @@ export default function InspectionFormPage() {
   const items = useMemo(() => (checklist?.groups || []).flatMap((g) => g.items.map((i) => ({ ...i, category_name: g.category.name }))), [checklist]);
   const done = items.filter((i) => results[i.id]?.status).length;
   const defects = items.filter((i) => results[i.id]?.status && results[i.id].status !== "OK").length;
-  const ready = truckId && kmHm !== "" && items.length > 0 && done === items.length;
+  const ready = truckId && typeId && kmHm !== "" && items.length > 0 && done === items.length;
 
   const submit = async () => {
     if (!ready) {
@@ -132,6 +136,7 @@ export default function InspectionFormPage() {
     try {
       const { data } = await api.post("/inspections", {
         truck_id: truckId,
+        inspection_type_id: typeId,
         km_hm: Number(kmHm),
         started_at: startedAt.toISOString(),
         inspection_date: localDate(),
@@ -155,7 +160,7 @@ export default function InspectionFormPage() {
 
       <div className="mt-5 space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
         {isSuper && <SiteSelect value={siteId} onChange={setSiteId} sites={sites} testId="form-site-select" />}
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("dump_trucks")}</label>
             <Select value={truckId} onValueChange={setTruckId}>
@@ -163,6 +168,17 @@ export default function InspectionFormPage() {
               <SelectContent className="bg-white">
                 {trucks.map((tr) => (
                   <SelectItem key={tr.id} value={tr.id} data-testid={`form-truck-opt-${tr.hull_number}`}>{tr.hull_number} · {tr.brand || ""} {tr.model || ""}{tr.plate_number ? ` · ${tr.plate_number}` : ""}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("inspection_type")}</label>
+            <Select value={typeId} onValueChange={setTypeId}>
+              <SelectTrigger className="h-11" data-testid="form-type-select"><SelectValue placeholder={t("select_inspection_type")} /></SelectTrigger>
+              <SelectContent className="bg-white">
+                {types.map((ty) => (
+                  <SelectItem key={ty.id} value={ty.id} data-testid={`form-type-opt-${ty.id}`}>{ty.code ? `${ty.code} · ` : ""}{ty.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

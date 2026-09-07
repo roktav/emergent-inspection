@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, XCircle, Clock, Gauge, User, ShieldCheck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, Clock, Gauge, User, ShieldCheck, Tag } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useT } from "../lib/i18n";
 import { api, errMsg, fileUrl } from "../lib/api";
@@ -59,7 +59,7 @@ export default function InspectionDetailPage() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-deep">{t("inspection_detail")}</p>
             <h1 className="mt-1 font-heading text-3xl font-semibold tracking-tight" data-testid="detail-unit">{insp.truck_hull_number} <span className="font-mono text-sm font-medium text-muted-foreground">{insp.truck_vin_number}</span></h1>
-            <p className="text-sm text-muted-foreground">{insp.inspection_date}</p>
+            <p className="text-sm text-muted-foreground">{insp.inspection_date}{insp.inspection_type_name && <> · <span className="font-semibold text-foreground" data-testid="detail-inspection-type">{insp.inspection_type_name}</span></>}</p>
           </div>
           <div className="flex flex-col items-end gap-2">
             <ApprovalBadge status={insp.status} testId="detail-approval-status" />
@@ -68,6 +68,7 @@ export default function InspectionDetailPage() {
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
           <Info icon={Gauge} label={t("km_hm")} value={insp.km_hm} testId="detail-kmhm" />
+          <Info icon={Tag} label={t("inspection_type")} value={insp.inspection_type_name} testId="detail-type" />
           <Info icon={User} label={t("driver_name")} value={insp.driver_name} testId="detail-driver" />
           <Info icon={Clock} label={t("started_at")} value={fmt(insp.started_at)} testId="detail-started" />
           <Info icon={Clock} label={t("completed_at")} value={`${fmt(insp.completed_at)} · ${minutes(insp.started_at, insp.completed_at)} ${t("min")}`} testId="detail-completed" />
