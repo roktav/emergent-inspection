@@ -28,7 +28,9 @@ services:
     build:
       context: ./frontend
       args:
-        REACT_APP_BACKEND_URL: https://inspection.inlinetechint.org
+        # CRA bakes this into the JS bundle at build time. For local Docker set
+        # REACT_APP_BACKEND_URL=http://localhost:8801 in `.env` (see README).
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-https://inspection.inlinetechint.org}
     container_name: inspection-frontend
     restart: unless-stopped
     ports:

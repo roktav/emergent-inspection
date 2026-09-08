@@ -10,7 +10,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 
-const HERO = "https://images.unsplash.com/photo-1622645636770-11fbf0611463?crop=entropy&cs=srgb&fm=jpg&q=85&w=1600";
+const HERO = "/login-hero.jpg";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -35,15 +35,14 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[1.1fr_1fr]">
-      <div className="relative hidden overflow-hidden lg:block">
-        <img src={HERO} alt="Dump truck at mining site" className="absolute inset-0 h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-brand-dark/40 to-brand/30" />
-        <div className="relative flex h-full flex-col justify-between p-12 text-white">
-          <img src="/logo-dark.png" alt="Inline Technology" className="w-44 rounded-md" />
+      <div className="relative hidden min-h-screen overflow-hidden lg:block">
+        <img src={HERO} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <div className="relative flex h-full flex-col justify-between p-12 text-brand-dark">
+          <img src="/logo.png" alt="Inline Technology" className="w-44 rounded-md" />
           <div className="max-w-md">
-            <p className="font-heading text-xs font-semibold uppercase tracking-[0.3em] text-brand-light">{t("app_name")}</p>
+            <p className="font-heading text-xs font-semibold uppercase tracking-[0.3em] text-brand-deep">{t("app_name")}</p>
             <h1 className="mt-3 font-heading text-4xl font-semibold leading-tight tracking-tight lg:text-5xl">{t("tagline")}</h1>
-            <div className="mt-8 flex gap-6 text-sm text-white/80">
+            <div className="mt-8 flex gap-6 text-sm text-brand-dark/70">
               <span className="flex items-center gap-2"><Truck className="h-4 w-4" /> 37-point chassis check</span>
               <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Admin approval</span>
             </div>
