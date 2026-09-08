@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 
 from auth import hash_password
 from database import db
+from migrations import apply_migrations
 
 TIRE = "Periksa kelurusan, retakan, jumlah 10 baut dan deformasi"
 STD = "Retak, bengkok, atau korosi berat"
@@ -58,8 +59,6 @@ TRUCKS = [
     ("MHRDT005IC2600005", "DT-005", "Hino", "FM 260 JD", "8x4", False),
 ]
 
-SCHEMA_VERSION = 2
-
 INSPECTION_TYPES = [
     ("Daily Inspection (P2H)", "P2H", "Pemeriksaan harian sebelum operasi"),
     ("Weekly Inspection", "WEEKLY", "Pemeriksaan mingguan"),
@@ -113,12 +112,6 @@ async def seed_all():
     driver_id = await upsert_user("driver@iti.demo", "Rizal Ramli", "driver", "Driver@1234", company_id, site_id)
     await upsert_user("driver2@iti.demo", "Ababil Ka'bah", "driver", "Driver@1234", company_id, site_id)
 
-    meta = await db.meta.find_one({"_id": "schema"})
-    if (meta or {}).get("version", 1) < SCHEMA_VERSION:
-        for c in ("dump_trucks", "inspection_categories", "inspection_items", "inspections"):
-            await db[c].delete_many({})
-        await db.meta.update_one({"_id": "schema"}, {"$set": {"version": SCHEMA_VERSION}}, upsert=True)
-
     cat_ids = {}
     for name, desc, ev_flag in (
         ("Chassis Inspection", "Pergerakan Driver Berlawanan Arah Jarum Jam (counter-clockwise walk-around)", False),
@@ -148,8 +141,6 @@ async def seed_all():
         else:
             type_ids[name] = str(it["_id"])
     daily_type = INSPECTION_TYPES[0][0]
-    await db.inspections.update_many({"site_id": site_id, "inspection_type_id": {"$in": [None, ""]}},
-                                     {"$set": {"inspection_type_id": type_ids[daily_type], "inspection_type_name": daily_type}})
 
     truck_ids = []
     for vin, hull, brand, model, layout, is_ev in TRUCKS:
@@ -199,3 +190,5 @@ async def seed_all():
                     "approved_at": (end + timedelta(hours=2)).isoformat() if approved else None,
                     "admin_note": None, "general_note": None,
                 })
+
+    await apply_migrations(db)
