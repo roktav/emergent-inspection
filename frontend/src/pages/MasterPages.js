@@ -81,9 +81,13 @@ export function UsersPage() {
   const { t } = useT();
   const { user } = useAuth();
   const isSuper = user.role === "superadmin";
+  const companies = useLookup("/companies", isSuper);
   const sites = useLookup("/sites");
+  const cmap = useMemo(() => byId(companies), [companies]);
   const smap = useMemo(() => byId(sites), [sites]);
   const roles = isSuper ? ["superadmin", "admin", "driver"] : ["driver"];
+  // A superadmin is global; only admins and drivers are placed in a company and site.
+  const globalRole = (vals) => vals.role === "superadmin";
   return (
     <MasterPage
       titleKey="users"
@@ -94,6 +98,7 @@ export function UsersPage() {
         { key: "name", label: "name" },
         { key: "email", label: "email" },
         { key: "role", label: "role", render: (r) => <Badge variant="secondary" className="capitalize">{t(r.role)}</Badge> },
+        ...(isSuper ? [{ key: "company_id", label: "company", render: (r) => cmap[r.company_id]?.name || "—" }] : []),
         { key: "site_id", label: "site", render: (r) => smap[r.site_id]?.name || "—" },
         { key: "is_active", label: "status" },
       ]}
@@ -102,7 +107,22 @@ export function UsersPage() {
         { key: "email", label: "email", type: "email", required: true },
         { key: "password", label: "password", type: "password", required: true, requiredOnCreate: true, hint: t("password_hint") },
         { key: "role", label: "role", type: "select", required: true, default: "driver", options: roles.map((r) => ({ value: r, label: t(r) })), disabled: !isSuper },
-        ...(isSuper ? [{ key: "site_id", label: "site", type: "select", options: sites.map((s) => ({ value: s.id, label: `${s.code} · ${s.name}` })) }] : []),
+        ...(isSuper ? [
+          {
+            key: "company_id", label: "company", type: "select", required: true,
+            placeholder: t("select_company"),
+            hidden: globalRole,
+            resets: ["site_id"],
+            options: companies.map((c) => ({ value: c.id, label: c.name })),
+          },
+          {
+            key: "site_id", label: "site", type: "select", required: true,
+            hidden: globalRole,
+            disabled: (vals) => !vals.company_id,
+            placeholder: (vals) => (vals.company_id ? t("select_site") : t("select_company_first")),
+            options: (vals) => sites.filter((s) => s.company_id === vals.company_id).map((s) => ({ value: s.id, label: `${s.code} · ${s.name}` })),
+          },
+        ] : []),
         { key: "is_active", label: "is_active", type: "switch" },
       ]}
     />

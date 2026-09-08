@@ -18,6 +18,17 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "./ui/alert-dialog";
 
+// `options`, `placeholder`, `disabled` and `hidden` may be given as a function of the
+// current form values, so one field can depend on another (e.g. site depends on company).
+const resolveProp = (prop, form) => (typeof prop === "function" ? prop(form) : prop);
+const isHidden = (field, form) => !!resolveProp(field.hidden, form);
+
+const applyChange = (form, field, value) => {
+  const next = { ...form, [field.key]: value };
+  if (form[field.key] !== value) (field.resets || []).forEach((key) => { next[key] = ""; });
+  return next;
+};
+
 export function FieldInput({ field, value, onChange, testId }) {
   const { t } = useT();
   const common = { id: field.key, "data-testid": testId };
@@ -125,6 +136,7 @@ export function MasterPage({ titleKey, endpoint, columns, fields, canWrite = tru
 
   const save = async () => {
     for (const fl of fields) {
+      if (isHidden(fl, form)) continue;
       if (fl.required && (form[fl.key] === "" || form[fl.key] == null) && !(fl.requiredOnCreate && editing)) {
         toast.error(`${t(fl.label)} is required`);
         return;
@@ -133,6 +145,9 @@ export function MasterPage({ titleKey, endpoint, columns, fields, canWrite = tru
     setSaving(true);
     try {
       const payload = { ...form };
+      fields.forEach((fl) => {
+        if (isHidden(fl, form)) delete payload[fl.key];
+      });
       Object.keys(payload).forEach((k) => {
         if (payload[k] === "") payload[k] = null;
       });
@@ -229,12 +244,22 @@ export function MasterPage({ titleKey, endpoint, columns, fields, canWrite = tru
             <DialogTitle className="font-heading">{editing ? t("edit") : t("add")} · {t(titleKey)}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-2">
-            {fields.filter((f) => !f.hidden).map((f) => (
+            {fields.filter((f) => !isHidden(f, form)).map((f) => (
               <div key={f.key} className="grid gap-1.5">
                 <Label htmlFor={f.key} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {t(f.label)}{f.required && !(f.requiredOnCreate && editing) ? " *" : ""}
                 </Label>
-                <FieldInput field={f} value={form[f.key]} onChange={(v) => setForm((s) => ({ ...s, [f.key]: v }))} testId={`${testPrefix}-field-${f.key}`} />
+                <FieldInput
+                  field={{
+                    ...f,
+                    options: resolveProp(f.options, form),
+                    placeholder: resolveProp(f.placeholder, form),
+                    disabled: resolveProp(f.disabled, form),
+                  }}
+                  value={form[f.key]}
+                  onChange={(v) => setForm((s) => applyChange(s, f, v))}
+                  testId={`${testPrefix}-field-${f.key}`}
+                />
                 {f.hint && <p className="text-xs text-muted-foreground">{f.hint}</p>}
               </div>
             ))}
