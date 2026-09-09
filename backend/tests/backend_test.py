@@ -445,6 +445,8 @@ class TestFiles:
         path = r.json()["path"]
         r2 = requests.get(f"{API}/files/{path}", headers=_auth(driver_ctx["token"]))
         assert r2.status_code == 200
+        leaked = requests.get(f"{API}/files/{path}", params={"auth": driver_ctx["token"]})
+        assert leaked.status_code == 401
 
     def test_non_image_400(self, driver_ctx):
         r = requests.post(f"{API}/uploads",

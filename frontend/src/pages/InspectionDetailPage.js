@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { ArrowLeft, CheckCircle2, XCircle, Clock, Gauge, User, ShieldCheck, Tag } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useT } from "../lib/i18n";
-import { api, errMsg, fileUrl } from "../lib/api";
+import { api, errMsg } from "../lib/api";
+import { AuthImage } from "../components/AuthImage";
 import { ApprovalBadge, StatusBadge } from "../components/StatusPill";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -131,9 +132,7 @@ function ResultTable({ title, rows, emptyText, testId, withIndex }) {
                   {r.photos?.length ? (
                     <div className="flex flex-wrap gap-1.5">
                       {r.photos.map((p) => (
-                        <a key={p} href={fileUrl(p)} target="_blank" rel="noreferrer" className="block h-12 w-12 overflow-hidden rounded-md border">
-                          <img src={fileUrl(p)} alt="finding" className="h-full w-full object-cover" />
-                        </a>
+                        <AuthImage key={p} path={p} alt="finding" openable className="h-12 w-12 object-cover" />
                       ))}
                     </div>
                   ) : "—"}

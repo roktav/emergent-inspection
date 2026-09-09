@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { Camera, X, Gauge, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useT } from "../lib/i18n";
-import { api, errMsg, fileUrl } from "../lib/api";
+import { api, errMsg } from "../lib/api";
+import { AuthImage } from "../components/AuthImage";
 import { StatusPill } from "../components/StatusPill";
 import { CameraCapture } from "../components/CameraCapture";
 import { Button } from "../components/ui/button";
@@ -40,7 +41,7 @@ function PhotoUploader({ photos, onChange, testId }) {
     <div className="flex flex-wrap items-center gap-2">
       {photos.map((p) => (
         <div key={p} className="relative h-16 w-16 overflow-hidden rounded-lg border">
-          <img src={fileUrl(p)} alt="finding" className="h-full w-full object-cover" />
+          <AuthImage path={p} alt="finding" className="h-full w-full object-cover" />
           <button type="button" onClick={() => onChange(photos.filter((x) => x !== p))} className="absolute right-0.5 top-0.5 rounded-full bg-white/90 p-0.5" data-testid={`${testId}-remove`}>
             <X className="h-3 w-3" />
           </button>

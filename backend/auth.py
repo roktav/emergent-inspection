@@ -1,11 +1,10 @@
 import os
 from datetime import datetime, timezone, timedelta
-from typing import Optional
 
 import bcrypt
 import jwt
 from bson import ObjectId
-from fastapi import Depends, HTTPException, Query, Request
+from fastapi import Depends, HTTPException, Request
 
 from database import db
 
@@ -31,13 +30,13 @@ def create_access_token(user_id: str, email: str, role: str) -> str:
     return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm=JWT_ALGORITHM)
 
 
-async def get_current_user(request: Request, auth: Optional[str] = Query(None)) -> dict:
+async def get_current_user(request: Request) -> dict:
     token = None
     header = request.headers.get("Authorization", "")
     if header.startswith("Bearer "):
         token = header[7:]
     if not token:
-        token = auth or request.cookies.get("access_token")
+        token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:

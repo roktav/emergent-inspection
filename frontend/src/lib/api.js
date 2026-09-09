@@ -25,7 +25,10 @@ api.interceptors.response.use(
   }
 );
 
-export const fileUrl = (path) => `${API}/files/${path}?auth=${getToken()}`;
+export async function fetchFileObjectUrl(path) {
+  const res = await api.get(`/files/${path}`, { responseType: "blob" });
+  return URL.createObjectURL(res.data);
+}
 
 export function errMsg(e, fallback = "Something went wrong") {
   const d = e?.response?.data?.detail;
