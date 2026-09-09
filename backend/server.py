@@ -523,21 +523,28 @@ async def create_inspection(body: InspectionCreate, user: dict = Depends(require
     return Inspection.from_mongo(await db.inspections.find_one({"_id": res.inserted_id})).out()
 
 
-@api_router.get("/inspections")
-async def list_inspections(
-    site_id: Optional[str] = None, truck_id: Optional[str] = None, status: Optional[str] = None,
-    date_from: Optional[str] = None, date_to: Optional[str] = None, limit: int = 200,
-    user: dict = Depends(require_roles(*ALL_ROLES)),
-):
+def _inspection_list_filter(
+    user: dict, site_id: Optional[str], truck_id: Optional[str], status: Optional[str],
+    date_from: Optional[str], date_to: Optional[str], driver_id: Optional[str],
+    inspection_type_id: Optional[str] = None,
+) -> dict:
     flt = scope_filter(user, site_id)
     if user["role"] == "driver":
         flt["driver_id"] = user["id"]
+    elif driver_id:
+        flt["driver_id"] = driver_id
     if truck_id:
         flt["truck_id"] = truck_id
+    if inspection_type_id:
+        flt["inspection_type_id"] = inspection_type_id
     if status:
         flt["status"] = status
     if date_from or date_to:
         flt["inspection_date"] = {k: v for k, v in (("$gte", date_from), ("$lte", date_to)) if v}
+    return flt
+
+
+async def _list_inspections_out(flt: dict, limit: int) -> List[dict]:
     docs = await db.inspections.find(flt, {"results": 0}).sort("completed_at", -1).to_list(limit)
     out = []
     for d in docs:
@@ -546,6 +553,42 @@ async def list_inspections(
         o.pop("results")
         out.append(o)
     return out
+
+
+@api_router.get("/inspections")
+async def list_inspections(
+    site_id: Optional[str] = None, truck_id: Optional[str] = None, status: Optional[str] = None,
+    date_from: Optional[str] = None, date_to: Optional[str] = None, driver_id: Optional[str] = None,
+    inspection_type_id: Optional[str] = None, limit: int = 200,
+    user: dict = Depends(require_roles(*ALL_ROLES)),
+):
+    flt = _inspection_list_filter(user, site_id, truck_id, status, date_from, date_to, driver_id, inspection_type_id)
+    return await _list_inspections_out(flt, limit)
+
+
+@api_router.get("/inspections/export")
+async def inspections_export(
+    site_id: Optional[str] = None, truck_id: Optional[str] = None, status: Optional[str] = None,
+    date_from: Optional[str] = None, date_to: Optional[str] = None, driver_id: Optional[str] = None,
+    inspection_type_id: Optional[str] = None, user: dict = Depends(require_roles(*ALL_ROLES)),
+):
+    flt = _inspection_list_filter(user, site_id, truck_id, status, date_from, date_to, driver_id, inspection_type_id)
+    rows = await _list_inspections_out(flt, 10000)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Date", "Unit", "VIN", "Inspection Type", "Driver", "KM/HM", "Checked", "Defects",
+                "Status", "Approved by", "Started", "Completed"])
+    for r in rows:
+        w.writerow([
+            r.get("inspection_date") or "", r.get("truck_hull_number") or "", r.get("truck_vin_number") or "",
+            r.get("inspection_type_name") or "", r.get("driver_name") or "", r.get("km_hm") or "",
+            r.get("total_items") or 0, r.get("defect_count") or 0, r.get("status") or "",
+            r.get("approved_by_name") or "", r.get("started_at") or "", r.get("completed_at") or "",
+        ])
+    buf.seek(0)
+    fname = f"inspections_{date_from or 'all'}_{date_to or 'all'}.csv"
+    return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",
+                             headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 @api_router.get("/inspections/{id_}")

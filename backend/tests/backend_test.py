@@ -344,6 +344,60 @@ class TestInspection:
         assert r.json()["status"] == "approved"
 
 
+class TestInspectionListFilters:
+    def _range(self):
+        d1 = datetime.now(timezone.utc).date()
+        return (d1 - timedelta(days=14)).isoformat(), d1.isoformat()
+
+    def test_export_csv_matches_filtered_list(self, admin_ctx):
+        tok = admin_ctx["token"]
+        d0, d1 = self._range()
+        trucks = requests.get(f"{API}/trucks", headers=_auth(tok)).json()
+        assert trucks
+        tid = trucks[0]["id"]
+        params = {"truck_id": tid, "date_from": d0, "date_to": d1}
+        listed = requests.get(f"{API}/inspections", params=params, headers=_auth(tok))
+        assert listed.status_code == 200
+        exported = requests.get(f"{API}/inspections/export", params=params, headers=_auth(tok))
+        assert exported.status_code == 200
+        assert "text/csv" in exported.headers.get("content-type", "")
+        lines = exported.text.strip().splitlines()
+        assert lines[0].startswith("Date,Unit,VIN,")
+        assert len(lines) - 1 == len(listed.json())
+
+    def test_driver_id_filter_admin(self, admin_ctx, driver_ctx):
+        tok = admin_ctx["token"]
+        did = driver_ctx["user"]["id"]
+        d0, d1 = self._range()
+        r = requests.get(f"{API}/inspections", params={"driver_id": did, "date_from": d0, "date_to": d1},
+                         headers=_auth(tok))
+        assert r.status_code == 200
+        assert all(i["driver_id"] == did for i in r.json())
+
+    def test_driver_cannot_override_driver_id(self, driver_ctx):
+        r = requests.get(f"{API}/inspections", params={"driver_id": "507f1f77bcf86cd799439011"},
+                         headers=_auth(driver_ctx["token"]))
+        assert r.status_code == 200
+        me = driver_ctx["user"]["id"]
+        assert all(i["driver_id"] == me for i in r.json())
+
+    def test_inspection_type_filter(self, admin_ctx):
+        tok = admin_ctx["token"]
+        d0, d1 = self._range()
+        types = requests.get(f"{API}/inspection-types", headers=_auth(tok)).json()
+        assert types
+        tid = types[0]["id"]
+        r = requests.get(f"{API}/inspections", params={"inspection_type_id": tid, "date_from": d0, "date_to": d1},
+                         headers=_auth(tok))
+        assert r.status_code == 200
+        assert all(i.get("inspection_type_id") == tid for i in r.json())
+        exported = requests.get(f"{API}/inspections/export",
+                                params={"inspection_type_id": tid, "date_from": d0, "date_to": d1},
+                                headers=_auth(tok))
+        assert exported.status_code == 200
+        assert len(exported.text.strip().splitlines()) - 1 == len(r.json())
+
+
 # ---------- Recap ----------
 class TestRecap:
     def _dates(self):
@@ -413,17 +467,33 @@ import uuid as _uuid
 
 
 def _read_env_kv(path, key):
-    for line in open(path):
-        line = line.strip()
-        if line.startswith(key + "="):
-            v = line.split("=", 1)[1].strip()
-            if v.startswith('"') and v.endswith('"'):
-                v = v[1:-1]
-            return v
+    try:
+        lines = open(path)
+    except OSError:
+        return None
+    with lines:
+        for line in lines:
+            line = line.strip()
+            if line.startswith(key + "="):
+                v = line.split("=", 1)[1].strip()
+                if v.startswith('"') and v.endswith('"'):
+                    v = v[1:-1]
+                return v
     return None
 
 
-CRON_SECRET = _read_env_kv("/app/backend/.env", "WEBHOOK_CRON_SECRET")
+def _cron_secret():
+    if os.environ.get("WEBHOOK_CRON_SECRET"):
+        return os.environ["WEBHOOK_CRON_SECRET"]
+    here = os.path.dirname(os.path.abspath(__file__))
+    for path in ("/app/backend/.env", os.path.join(here, "..", ".env")):
+        secret = _read_env_kv(path, "WEBHOOK_CRON_SECRET")
+        if secret:
+            return secret
+    return None
+
+
+CRON_SECRET = _cron_secret()
 
 
 class TestUploadSizeLimit:

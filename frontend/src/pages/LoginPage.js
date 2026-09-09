@@ -36,15 +36,16 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[1.1fr_1fr]">
       <div className="relative hidden min-h-screen overflow-hidden lg:block">
-        <img src={HERO} alt="" className="absolute inset-0 h-full w-full object-cover" />
-        <div className="relative flex h-full flex-col justify-between p-12 text-brand-dark">
+        <img src={HERO} alt="" className="absolute inset-0 h-full w-full object-cover object-right" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-brand-dark/75 via-brand-dark/25 to-transparent" />
+        <div className="relative flex h-full flex-col justify-between p-12 text-white">
           <img src="/logo.png" alt="Inline Technology" className="w-44 rounded-md" />
-          <div className="max-w-md">
-            <p className="font-heading text-xs font-semibold uppercase tracking-[0.3em] text-brand-deep">{t("app_name")}</p>
+          <div className="max-w-md drop-shadow-[0_2px_10px_rgba(35,25,21,0.7)]">
+            <p className="font-heading text-xs font-semibold uppercase tracking-[0.3em] text-brand-light">{t("app_name")}</p>
             <h1 className="mt-3 font-heading text-4xl font-semibold leading-tight tracking-tight lg:text-5xl">{t("tagline")}</h1>
-            <div className="mt-8 flex gap-6 text-sm text-brand-dark/70">
-              <span className="flex items-center gap-2"><Truck className="h-4 w-4" /> 37-point chassis check</span>
-              <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Admin approval</span>
+            <div className="mt-8 flex gap-6 text-sm text-white/90">
+              <span className="flex items-center gap-2"><Truck className="h-4 w-4 text-brand-light" /> 37-point chassis check</span>
+              <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-brand-light" /> Admin approval</span>
             </div>
           </div>
         </div>
