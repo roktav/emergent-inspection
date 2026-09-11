@@ -26,20 +26,20 @@ function Cell({ cell }) {
 
 export default function RecapPage() {
   const { t } = useT();
-  const { isSuper, sites, siteId, setSiteId } = useSiteScope();
+  const { sites, siteId, setSiteId, needsSitePicker } = useSiteScope();
   const [from, setFrom] = useState(iso(new Date(Date.now() - 13 * 86400000)));
   const [to, setTo] = useState(iso(new Date()));
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const params = { site_id: isSuper ? siteId : undefined, date_from: from, date_to: to };
+  const params = { site_id: needsSitePicker ? siteId : undefined, date_from: from, date_to: to };
 
   useEffect(() => {
-    if (isSuper && !siteId) return;
+    if (needsSitePicker && !siteId) return;
     setLoading(true);
     api.get("/recap", { params }).then((r) => setData(r.data)).catch((e) => toast.error(errMsg(e))).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSuper, siteId, from, to]);
+  }, [needsSitePicker, siteId, from, to]);
 
   const exportCsv = (kind) => downloadCsv("/recap/export", { ...params, kind }, `recap_${kind}_${from}_${to}.csv`).catch((e) => toast.error(errMsg(e)));
 
@@ -53,7 +53,7 @@ export default function RecapPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-white p-3 shadow-sm">
-        {isSuper && <SiteSelect value={siteId} onChange={setSiteId} sites={sites} testId="recap-site-select" />}
+        {needsSitePicker && <SiteSelect value={siteId} onChange={setSiteId} sites={sites} testId="recap-site-select" />}
         <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" data-testid="recap-from" />
         <span className="text-muted-foreground">—</span>
         <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" data-testid="recap-to" />

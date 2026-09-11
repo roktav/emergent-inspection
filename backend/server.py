@@ -31,8 +31,10 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="DT Inspection API")
 api_router = APIRouter(prefix="/api")
 
-ADMIN_ROLES = ("admin", "superadmin")
-ALL_ROLES = ("admin", "superadmin", "driver")
+ALL_ROLES = ("superadmin", "company_admin", "site_admin", "driver", "mechanic")
+COMPANY_ADMIN_ROLES = ("superadmin", "company_admin")
+SITE_ADMIN_ROLES = ("superadmin", "company_admin", "site_admin")
+FIELD_ROLES = ("driver", "mechanic")
 MAX_PHOTO_BYTES = 500 * 1024
 
 
@@ -79,7 +81,7 @@ class Site(BaseDocument):
 class User(BaseDocument):
     email: str
     name: str
-    role: Literal["superadmin", "admin", "driver"]
+    role: Literal["superadmin", "company_admin", "site_admin", "driver", "mechanic"]
     company_id: Optional[str] = None
     site_id: Optional[str] = None
     is_active: bool = True
@@ -88,7 +90,7 @@ class User(BaseDocument):
 class UserIn(BaseModel):
     email: str
     name: str
-    role: Literal["superadmin", "admin", "driver"] = "driver"
+    role: Literal["superadmin", "company_admin", "site_admin", "driver", "mechanic"] = "driver"
     company_id: Optional[str] = None
     site_id: Optional[str] = None
     password: Optional[str] = None
@@ -101,7 +103,14 @@ class DumpTruck(BaseDocument):
     unit_vin_number: str
     hull_number: str
     plate_number: Optional[str] = None
+    vehicle_category_id: Optional[str] = None
+    is_active: bool = True
+
+
+class VehicleCategory(BaseDocument):
+    company_id: Optional[str] = None
     brand: Optional[str] = None
+    name: str
     model: Optional[str] = None
     drivetrain_layout: Optional[str] = None
     category_ids: List[str] = []
@@ -110,7 +119,6 @@ class DumpTruck(BaseDocument):
 
 class InspectionCategory(BaseDocument):
     company_id: Optional[str] = None
-    site_id: Optional[str] = None
     name: str
     description: Optional[str] = None
     item_ids: List[str] = []
@@ -119,8 +127,6 @@ class InspectionCategory(BaseDocument):
 
 class InspectionItem(BaseDocument):
     company_id: Optional[str] = None
-    site_id: Optional[str] = None
-    category_id: Optional[str] = None
     name: str
     guidance: Optional[str] = None
     status_options: List[str] = ["OK", "NOT_OK", "KOROSI"]
@@ -129,7 +135,6 @@ class InspectionItem(BaseDocument):
 
 class InspectionType(BaseDocument):
     company_id: Optional[str] = None
-    site_id: Optional[str] = None
     name: str
     code: Optional[str] = None
     description: Optional[str] = None
@@ -218,26 +223,72 @@ async def list_out(coll: str, Model, flt: dict, sort=("name", 1)) -> List[dict]:
     return [Model.from_mongo(d).out() for d in docs]
 
 
-def scope_filter(user: dict, site_id: Optional[str] = None) -> dict:
+def site_scope(user: dict, site_id: Optional[str] = None) -> dict:
     if user["role"] == "superadmin":
         return {"site_id": site_id} if site_id else {}
+    if user["role"] == "company_admin":
+        if site_id:
+            return {"site_id": site_id, "company_id": user["company_id"]}
+        return {"company_id": user["company_id"]}
     return {"site_id": user["site_id"]}
 
 
-async def enforce_scope(user: dict, data: dict) -> dict:
-    if user["role"] != "superadmin":
-        data["site_id"] = user["site_id"]
-        data["company_id"] = user["company_id"]
+def company_scope(user: dict, company_id: Optional[str] = None) -> dict:
+    if user["role"] == "superadmin":
+        return {"company_id": company_id} if company_id else {}
+    return {"company_id": user["company_id"]}
+
+
+# Back-compat alias used by older call sites in this module.
+def scope_filter(user: dict, site_id: Optional[str] = None) -> dict:
+    return site_scope(user, site_id)
+
+
+async def enforce_site_scope(user: dict, data: dict) -> dict:
+    if user["role"] == "superadmin":
+        if not data.get("site_id"):
+            raise HTTPException(status_code=400, detail="site_id is required")
+        site = await find_or_404("sites", data["site_id"])
+        data["company_id"] = site["company_id"]
         return data
-    if not data.get("site_id"):
-        raise HTTPException(status_code=400, detail="site_id is required")
-    site = await find_or_404("sites", data["site_id"])
-    data["company_id"] = site["company_id"]
+    if user["role"] == "company_admin":
+        if not data.get("site_id"):
+            raise HTTPException(status_code=400, detail="site_id is required")
+        site = await find_or_404("sites", data["site_id"], {"company_id": user["company_id"]})
+        data["company_id"] = site["company_id"]
+        return data
+    data["site_id"] = user["site_id"]
+    data["company_id"] = user["company_id"]
+    return data
+
+
+async def enforce_company_scope(user: dict, data: dict) -> dict:
+    data.pop("site_id", None)
+    if user["role"] == "superadmin":
+        if not data.get("company_id"):
+            raise HTTPException(status_code=400, detail="company_id is required")
+        await find_or_404("companies", data["company_id"])
+        return data
+    data["company_id"] = user["company_id"]
     return data
 
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+async def _enrich_truck(truck: dict) -> dict:
+    out = DumpTruck.from_mongo(truck).out()
+    vc_id = truck.get("vehicle_category_id")
+    if vc_id:
+        vc = await db.vehicle_categories.find_one({"_id": oid(vc_id)})
+        if vc:
+            out["brand"] = vc.get("brand")
+            out["model"] = vc.get("model")
+            out["drivetrain_layout"] = vc.get("drivetrain_layout")
+            out["vehicle_category_name"] = vc.get("name")
+            out["category_ids"] = vc.get("category_ids") or []
+    return out
 
 
 # ---------- Auth ----------
@@ -304,27 +355,43 @@ async def delete_company(id_: str, user: dict = Depends(require_roles("superadmi
 
 # ---------- Sites ----------
 @api_router.get("/sites")
-async def list_sites(user: dict = Depends(require_roles(*ALL_ROLES))):
-    flt = {} if user["role"] == "superadmin" else {"_id": oid(user["site_id"])}
+async def list_sites(company_id: Optional[str] = None, user: dict = Depends(require_roles(*ALL_ROLES))):
+    if user["role"] == "superadmin":
+        flt = {"company_id": company_id} if company_id else {}
+    elif user["role"] == "company_admin":
+        flt = {"company_id": user["company_id"]}
+    else:
+        flt = {"_id": oid(user["site_id"])}
     return await list_out("sites", Site, flt)
 
 
 @api_router.post("/sites")
-async def create_site(body: Site, user: dict = Depends(require_roles("superadmin"))):
-    await find_or_404("companies", body.company_id)
-    res = await db.sites.insert_one(body.to_mongo())
+async def create_site(body: Site, user: dict = Depends(require_roles(*COMPANY_ADMIN_ROLES))):
+    data = body.to_mongo()
+    if user["role"] == "company_admin":
+        data["company_id"] = user["company_id"]
+    await find_or_404("companies", data["company_id"])
+    res = await db.sites.insert_one(data)
     return Site.from_mongo(await db.sites.find_one({"_id": res.inserted_id})).out()
 
 
 @api_router.put("/sites/{id_}")
-async def update_site(id_: str, body: Site, user: dict = Depends(require_roles("superadmin"))):
-    await find_or_404("sites", id_)
-    await db.sites.update_one({"_id": oid(id_)}, {"$set": body.to_mongo()})
+async def update_site(id_: str, body: Site, user: dict = Depends(require_roles(*COMPANY_ADMIN_ROLES))):
+    flt = company_scope(user)
+    existing = await find_or_404("sites", id_, flt if user["role"] != "superadmin" else None)
+    data = body.to_mongo()
+    if user["role"] == "company_admin":
+        data["company_id"] = user["company_id"]
+    elif user["role"] == "superadmin":
+        await find_or_404("companies", data["company_id"])
+    await db.sites.update_one({"_id": oid(id_)}, {"$set": data})
     return Site.from_mongo(await db.sites.find_one({"_id": oid(id_)})).out()
 
 
 @api_router.delete("/sites/{id_}")
-async def delete_site(id_: str, user: dict = Depends(require_roles("superadmin"))):
+async def delete_site(id_: str, user: dict = Depends(require_roles(*COMPANY_ADMIN_ROLES))):
+    flt = {"company_id": user["company_id"]} if user["role"] == "company_admin" else None
+    await find_or_404("sites", id_, flt)
     if await db.dump_trucks.count_documents({"site_id": id_}) or await db.users.count_documents({"site_id": id_}):
         raise HTTPException(status_code=400, detail="Site has trucks or users assigned")
     await db.sites.delete_one({"_id": oid(id_)})
@@ -333,22 +400,43 @@ async def delete_site(id_: str, user: dict = Depends(require_roles("superadmin")
 
 # ---------- Users ----------
 @api_router.get("/users")
-async def list_users(site_id: Optional[str] = None, user: dict = Depends(require_roles(*ADMIN_ROLES))):
-    return await list_out("users", User, scope_filter(user, site_id))
+async def list_users(site_id: Optional[str] = None, user: dict = Depends(require_roles(*SITE_ADMIN_ROLES))):
+    return await list_out("users", User, site_scope(user, site_id))
 
 
 async def _user_payload(body: UserIn, user: dict, creating: bool) -> dict:
     data = body.model_dump(exclude={"password"})
     data["email"] = data["email"].lower().strip()
-    if user["role"] == "admin":
-        if data["role"] != "driver":
-            raise HTTPException(status_code=403, detail="Admin can only manage drivers")
+    role = data["role"]
+
+    if user["role"] == "site_admin":
+        if role not in ("driver", "mechanic"):
+            raise HTTPException(status_code=403, detail="Site admin can only manage drivers and mechanics")
         data["site_id"], data["company_id"] = user["site_id"], user["company_id"]
-    elif data["role"] != "superadmin":
+    elif user["role"] == "company_admin":
+        if role not in ("site_admin", "driver", "mechanic"):
+            raise HTTPException(status_code=403, detail="Company admin cannot create that role")
         if not data.get("site_id"):
-            raise HTTPException(status_code=400, detail="site_id is required for admin/driver")
-        site = await find_or_404("sites", data["site_id"])
+            raise HTTPException(status_code=400, detail="site_id is required")
+        site = await find_or_404("sites", data["site_id"], {"company_id": user["company_id"]})
         data["company_id"] = site["company_id"]
+    elif user["role"] == "superadmin":
+        if role == "superadmin":
+            data["company_id"] = None
+            data["site_id"] = None
+        elif role == "company_admin":
+            if not data.get("company_id"):
+                raise HTTPException(status_code=400, detail="company_id is required for company_admin")
+            await find_or_404("companies", data["company_id"])
+            data["site_id"] = None
+        else:
+            if not data.get("site_id"):
+                raise HTTPException(status_code=400, detail="site_id is required")
+            site = await find_or_404("sites", data["site_id"])
+            data["company_id"] = site["company_id"]
+    else:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
     if body.password:
         if len(body.password) < 6:
             raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
@@ -359,7 +447,7 @@ async def _user_payload(body: UserIn, user: dict, creating: bool) -> dict:
 
 
 @api_router.post("/users")
-async def create_user(body: UserIn, user: dict = Depends(require_roles(*ADMIN_ROLES))):
+async def create_user(body: UserIn, user: dict = Depends(require_roles(*SITE_ADMIN_ROLES))):
     data = await _user_payload(body, user, True)
     if await db.users.find_one({"email": data["email"]}):
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -369,10 +457,12 @@ async def create_user(body: UserIn, user: dict = Depends(require_roles(*ADMIN_RO
 
 
 @api_router.put("/users/{id_}")
-async def update_user(id_: str, body: UserIn, user: dict = Depends(require_roles(*ADMIN_ROLES))):
-    existing = await find_or_404("users", id_, scope_filter(user))
-    if user["role"] == "admin" and existing["role"] != "driver":
-        raise HTTPException(status_code=403, detail="Admin can only manage drivers")
+async def update_user(id_: str, body: UserIn, user: dict = Depends(require_roles(*SITE_ADMIN_ROLES))):
+    existing = await find_or_404("users", id_, site_scope(user))
+    if user["role"] == "site_admin" and existing["role"] not in ("driver", "mechanic"):
+        raise HTTPException(status_code=403, detail="Site admin can only manage drivers and mechanics")
+    if user["role"] == "company_admin" and existing["role"] in ("superadmin", "company_admin"):
+        raise HTTPException(status_code=403, detail="Cannot manage that user")
     data = await _user_payload(body, user, False)
     dup = await db.users.find_one({"email": data["email"], "_id": {"$ne": oid(id_)}})
     if dup:
@@ -382,108 +472,134 @@ async def update_user(id_: str, body: UserIn, user: dict = Depends(require_roles
 
 
 @api_router.delete("/users/{id_}")
-async def delete_user(id_: str, user: dict = Depends(require_roles(*ADMIN_ROLES))):
+async def delete_user(id_: str, user: dict = Depends(require_roles(*SITE_ADMIN_ROLES))):
     if id_ == user["id"]:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
-    existing = await find_or_404("users", id_, scope_filter(user))
-    if user["role"] == "admin" and existing["role"] != "driver":
-        raise HTTPException(status_code=403, detail="Admin can only manage drivers")
+    existing = await find_or_404("users", id_, site_scope(user))
+    if user["role"] == "site_admin" and existing["role"] not in ("driver", "mechanic"):
+        raise HTTPException(status_code=403, detail="Site admin can only manage drivers and mechanics")
+    if user["role"] == "company_admin" and existing["role"] in ("superadmin", "company_admin"):
+        raise HTTPException(status_code=403, detail="Cannot manage that user")
     await db.users.delete_one({"_id": oid(id_)})
     return {"ok": True}
 
 
-# ---------- Generic site-scoped masters (trucks, categories, items) ----------
-async def sync_item_category(item_id: str, new_cat: Optional[str], old_cat: Optional[str]):
-    if old_cat and old_cat != new_cat:
-        await db.inspection_categories.update_one({"_id": oid(old_cat)}, {"$pull": {"item_ids": item_id}})
-    if new_cat:
-        await db.inspection_categories.update_one({"_id": oid(new_cat), "item_ids": {"$ne": item_id}},
-                                                  {"$push": {"item_ids": item_id}})
-
-
-def register_master(path: str, coll: str, Model, sort_key: str):
+# ---------- Company-scoped masters ----------
+def register_company_master(path: str, coll: str, Model, sort_key: str, *, read_roles=ALL_ROLES, write_roles=COMPANY_ADMIN_ROLES):
     @api_router.get(f"/{path}")
-    async def _list(site_id: Optional[str] = None, user: dict = Depends(require_roles(*ALL_ROLES))):
-        return await list_out(coll, Model, scope_filter(user, site_id), (sort_key, 1))
+    async def _list(company_id: Optional[str] = None, user: dict = Depends(require_roles(*read_roles))):
+        return await list_out(coll, Model, company_scope(user, company_id), (sort_key, 1))
 
     @api_router.post(f"/{path}")
-    async def _create(body: Model, user: dict = Depends(require_roles(*ADMIN_ROLES))):
-        data = await enforce_scope(user, body.to_mongo())
+    async def _create(body: Model, user: dict = Depends(require_roles(*write_roles))):
+        data = await enforce_company_scope(user, body.to_mongo())
         data.pop("item_ids", None)
         data.pop("category_ids", None)
         res = await db[coll].insert_one(data)
-        if coll == "inspection_items":
-            await sync_item_category(str(res.inserted_id), data.get("category_id"), None)
         return Model.from_mongo(await db[coll].find_one({"_id": res.inserted_id})).out()
 
     @api_router.put(f"/{path}/{{id_}}")
-    async def _update(id_: str, body: Model, user: dict = Depends(require_roles(*ADMIN_ROLES))):
-        existing = await find_or_404(coll, id_, scope_filter(user))
-        data = await enforce_scope(user, body.to_mongo())
+    async def _update(id_: str, body: Model, user: dict = Depends(require_roles(*write_roles))):
+        await find_or_404(coll, id_, company_scope(user))
+        data = await enforce_company_scope(user, body.to_mongo())
         data.pop("item_ids", None)
         data.pop("category_ids", None)
-        if coll == "inspection_items" and "category_id" not in data:
-            data["category_id"] = None
         await db[coll].update_one({"_id": oid(id_)}, {"$set": data})
-        if coll == "inspection_items":
-            await sync_item_category(id_, data.get("category_id"), existing.get("category_id"))
         return Model.from_mongo(await db[coll].find_one({"_id": oid(id_)})).out()
 
     @api_router.delete(f"/{path}/{{id_}}")
-    async def _delete(id_: str, user: dict = Depends(require_roles(*ADMIN_ROLES))):
-        existing = await find_or_404(coll, id_, scope_filter(user))
+    async def _delete(id_: str, user: dict = Depends(require_roles(*write_roles))):
+        existing = await find_or_404(coll, id_, company_scope(user))
         if coll == "inspection_categories" and existing.get("item_ids"):
             raise HTTPException(status_code=400, detail="Category still has assigned items")
         if coll == "inspection_items":
             await db.inspection_categories.update_many({"item_ids": id_}, {"$pull": {"item_ids": id_}})
         if coll == "inspection_categories":
-            await db.dump_trucks.update_many({"category_ids": id_}, {"$pull": {"category_ids": id_}})
+            await db.vehicle_categories.update_many({"category_ids": id_}, {"$pull": {"category_ids": id_}})
+        if coll == "vehicle_categories":
+            if await db.dump_trucks.count_documents({"vehicle_category_id": id_}):
+                raise HTTPException(status_code=400, detail="Vehicle category is used by units")
         await db[coll].delete_one({"_id": oid(id_)})
         return {"ok": True}
 
 
-register_master("trucks", "dump_trucks", DumpTruck, "hull_number")
-register_master("categories", "inspection_categories", InspectionCategory, "name")
-register_master("items", "inspection_items", InspectionItem, "name")
-register_master("inspection-types", "inspection_types", InspectionType, "name")
+register_company_master("categories", "inspection_categories", InspectionCategory, "name")
+register_company_master("items", "inspection_items", InspectionItem, "name")
+register_company_master("inspection-types", "inspection_types", InspectionType, "name")
+register_company_master("vehicle-categories", "vehicle_categories", VehicleCategory, "name")
+
+
+# ---------- Site-scoped vehicle list ----------
+@api_router.get("/trucks")
+async def list_trucks(site_id: Optional[str] = None, user: dict = Depends(require_roles(*ALL_ROLES))):
+    docs = await db.dump_trucks.find(site_scope(user, site_id)).sort("hull_number", 1).to_list(2000)
+    return [await _enrich_truck(d) for d in docs]
+
+
+@api_router.post("/trucks")
+async def create_truck(body: DumpTruck, user: dict = Depends(require_roles(*SITE_ADMIN_ROLES))):
+    data = await enforce_site_scope(user, body.to_mongo())
+    vc_id = data.get("vehicle_category_id")
+    if not vc_id:
+        raise HTTPException(status_code=400, detail="vehicle_category_id is required")
+    await find_or_404("vehicle_categories", vc_id, {"company_id": data["company_id"]})
+    res = await db.dump_trucks.insert_one(data)
+    return await _enrich_truck(await db.dump_trucks.find_one({"_id": res.inserted_id}))
+
+
+@api_router.put("/trucks/{id_}")
+async def update_truck(id_: str, body: DumpTruck, user: dict = Depends(require_roles(*SITE_ADMIN_ROLES))):
+    await find_or_404("dump_trucks", id_, site_scope(user))
+    data = await enforce_site_scope(user, body.to_mongo())
+    vc_id = data.get("vehicle_category_id")
+    if not vc_id:
+        raise HTTPException(status_code=400, detail="vehicle_category_id is required")
+    await find_or_404("vehicle_categories", vc_id, {"company_id": data["company_id"]})
+    await db.dump_trucks.update_one({"_id": oid(id_)}, {"$set": data})
+    return await _enrich_truck(await db.dump_trucks.find_one({"_id": oid(id_)}))
+
+
+@api_router.delete("/trucks/{id_}")
+async def delete_truck(id_: str, user: dict = Depends(require_roles(*SITE_ADMIN_ROLES))):
+    await find_or_404("dump_trucks", id_, site_scope(user))
+    await db.dump_trucks.delete_one({"_id": oid(id_)})
+    return {"ok": True}
 
 
 @api_router.put("/categories/{id_}/items")
-async def assign_items(id_: str, body: IdList, user: dict = Depends(require_roles(*ADMIN_ROLES))):
-    cat = await find_or_404("inspection_categories", id_, scope_filter(user))
+async def assign_items(id_: str, body: IdList, user: dict = Depends(require_roles(*COMPANY_ADMIN_ROLES))):
+    cat = await find_or_404("inspection_categories", id_, company_scope(user))
     ids = list(dict.fromkeys(body.ids))
-    valid = await db.inspection_items.find({"_id": {"$in": [oid(i) for i in ids]}, "site_id": cat["site_id"]}).to_list(1000)
+    valid = await db.inspection_items.find(
+        {"_id": {"$in": [oid(i) for i in ids]}, "company_id": cat["company_id"]}).to_list(1000)
     valid_ids = {str(v["_id"]) for v in valid}
     ids = [i for i in ids if i in valid_ids]
-    removed = [i for i in cat.get("item_ids", []) if i not in ids]
-    if removed:
-        await db.inspection_items.update_many({"_id": {"$in": [oid(i) for i in removed]}, "category_id": id_},
-                                              {"$set": {"category_id": None}})
-    if ids:
-        old_cats = await db.inspection_categories.find({"_id": {"$ne": oid(id_)}, "item_ids": {"$in": ids}}).to_list(200)
-        for oc in old_cats:
-            await db.inspection_categories.update_one({"_id": oc["_id"]}, {"$pull": {"item_ids": {"$in": ids}}})
-        await db.inspection_items.update_many({"_id": {"$in": [oid(i) for i in ids]}}, {"$set": {"category_id": id_}})
+    # Many-to-many: do not remove the item from other categories.
     await db.inspection_categories.update_one({"_id": oid(id_)}, {"$set": {"item_ids": ids}})
     return InspectionCategory.from_mongo(await db.inspection_categories.find_one({"_id": oid(id_)})).out()
 
 
-@api_router.put("/trucks/{id_}/categories")
-async def assign_categories(id_: str, body: IdList, user: dict = Depends(require_roles(*ADMIN_ROLES))):
-    truck = await find_or_404("dump_trucks", id_, scope_filter(user))
+@api_router.put("/vehicle-categories/{id_}/inspection-categories")
+async def assign_vehicle_inspection_categories(id_: str, body: IdList, user: dict = Depends(require_roles(*COMPANY_ADMIN_ROLES))):
+    vc = await find_or_404("vehicle_categories", id_, company_scope(user))
     ids = list(dict.fromkeys(body.ids))
-    valid = await db.inspection_categories.find({"_id": {"$in": [oid(i) for i in ids]}, "site_id": truck["site_id"]}).to_list(1000)
+    valid = await db.inspection_categories.find(
+        {"_id": {"$in": [oid(i) for i in ids]}, "company_id": vc["company_id"]}).to_list(1000)
     valid_ids = {str(v["_id"]) for v in valid}
     ids = [i for i in ids if i in valid_ids]
-    await db.dump_trucks.update_one({"_id": oid(id_)}, {"$set": {"category_ids": ids}})
-    return DumpTruck.from_mongo(await db.dump_trucks.find_one({"_id": oid(id_)})).out()
+    await db.vehicle_categories.update_one({"_id": oid(id_)}, {"$set": {"category_ids": ids}})
+    return VehicleCategory.from_mongo(await db.vehicle_categories.find_one({"_id": oid(id_)})).out()
 
 
 # ---------- Inspections ----------
 @api_router.get("/inspections/checklist")
 async def checklist(truck_id: str, user: dict = Depends(require_roles(*ALL_ROLES))):
-    truck = await find_or_404("dump_trucks", truck_id, scope_filter(user))
-    cat_ids = truck.get("category_ids", [])
+    truck = await find_or_404("dump_trucks", truck_id, site_scope(user))
+    vc = None
+    cat_ids = []
+    if truck.get("vehicle_category_id"):
+        vc = await db.vehicle_categories.find_one({"_id": oid(truck["vehicle_category_id"])})
+        cat_ids = (vc or {}).get("category_ids") or []
     cats = {str(c["_id"]): c for c in await db.inspection_categories.find(
         {"_id": {"$in": [oid(i) for i in cat_ids]}, "is_active": True}).to_list(200)}
     all_item_ids = [i for cid in cat_ids if cid in cats for i in cats[cid].get("item_ids", [])]
@@ -497,13 +613,14 @@ async def checklist(truck_id: str, user: dict = Depends(require_roles(*ALL_ROLES
         its = [InspectionItem.from_mongo(items[i]).out() for i in c.get("item_ids", []) if i in items]
         if its:
             groups.append({"category": InspectionCategory.from_mongo(c).out(), "items": its})
-    return {"truck": DumpTruck.from_mongo(truck).out(), "groups": groups}
+    return {"truck": await _enrich_truck(truck), "groups": groups}
 
 
 @api_router.post("/inspections")
 async def create_inspection(body: InspectionCreate, user: dict = Depends(require_roles(*ALL_ROLES))):
-    truck = await find_or_404("dump_trucks", body.truck_id, scope_filter(user))
-    itype = await db.inspection_types.find_one({"_id": oid(body.inspection_type_id), "site_id": truck["site_id"], "is_active": True})
+    truck = await find_or_404("dump_trucks", body.truck_id, site_scope(user))
+    itype = await db.inspection_types.find_one({
+        "_id": oid(body.inspection_type_id), "company_id": truck["company_id"], "is_active": True})
     if not itype:
         raise HTTPException(status_code=400, detail="Invalid inspection type")
     if not body.results:
@@ -528,8 +645,8 @@ def _inspection_list_filter(
     date_from: Optional[str], date_to: Optional[str], driver_id: Optional[str],
     inspection_type_id: Optional[str] = None,
 ) -> dict:
-    flt = scope_filter(user, site_id)
-    if user["role"] == "driver":
+    flt = site_scope(user, site_id)
+    if user["role"] in FIELD_ROLES:
         flt["driver_id"] = user["id"]
     elif driver_id:
         flt["driver_id"] = driver_id
@@ -576,7 +693,7 @@ async def inspections_export(
     rows = await _list_inspections_out(flt, 10000)
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["Date", "Unit", "VIN", "Inspection Type", "Driver", "KM/HM", "Checked", "Defects",
+    w.writerow(["Date", "Unit", "VIN", "Inspection Type", "Driver/Mechanic", "KM/HM", "Checked", "Defects",
                 "Status", "Approved by", "Started", "Completed"])
     for r in rows:
         w.writerow([
@@ -593,15 +710,15 @@ async def inspections_export(
 
 @api_router.get("/inspections/{id_}")
 async def get_inspection(id_: str, user: dict = Depends(require_roles(*ALL_ROLES))):
-    flt = scope_filter(user)
-    if user["role"] == "driver":
+    flt = site_scope(user)
+    if user["role"] in FIELD_ROLES:
         flt["driver_id"] = user["id"]
     return Inspection.from_mongo(await find_or_404("inspections", id_, flt)).out()
 
 
 @api_router.post("/inspections/{id_}/approval")
-async def approve_inspection(id_: str, body: ApprovalIn, user: dict = Depends(require_roles(*ADMIN_ROLES))):
-    await find_or_404("inspections", id_, scope_filter(user))
+async def approve_inspection(id_: str, body: ApprovalIn, user: dict = Depends(require_roles(*SITE_ADMIN_ROLES))):
+    await find_or_404("inspections", id_, site_scope(user))
     await db.inspections.update_one({"_id": oid(id_)}, {"$set": {
         "status": body.decision, "approved_by": user["id"], "approved_by_name": user["name"],
         "approved_at": now_iso(), "admin_note": body.admin_note}})
@@ -611,10 +728,10 @@ async def approve_inspection(id_: str, body: ApprovalIn, user: dict = Depends(re
 # ---------- Dashboard ----------
 @api_router.get("/dashboard")
 async def dashboard(site_id: Optional[str] = None, user: dict = Depends(require_roles(*ALL_ROLES))):
-    flt = scope_filter(user, site_id)
+    flt = site_scope(user, site_id)
     today = date.today().isoformat()
     insp_flt = dict(flt)
-    if user["role"] == "driver":
+    if user["role"] in FIELD_ROLES:
         insp_flt["driver_id"] = user["id"]
     trucks = await db.dump_trucks.count_documents({**flt, "is_active": True})
     today_ins = await db.inspections.count_documents({**insp_flt, "inspection_date": today})
@@ -629,8 +746,13 @@ async def dashboard(site_id: Optional[str] = None, user: dict = Depends(require_
 
 # ---------- Recap ----------
 async def build_recap(user: dict, site_id: Optional[str], date_from: str, date_to: str) -> dict:
-    flt = scope_filter(user, site_id)
-    if not flt:
+    flt = site_scope(user, site_id)
+    if user["role"] == "superadmin" and not site_id:
+        raise HTTPException(status_code=400, detail="site_id is required")
+    if user["role"] == "company_admin" and not site_id and "company_id" in flt and "site_id" not in flt:
+        # company-wide recap allowed when site omitted — keep company filter
+        pass
+    elif not flt.get("site_id") and user["role"] == "superadmin":
         raise HTTPException(status_code=400, detail="site_id is required")
     d0, d1 = date.fromisoformat(date_from), date.fromisoformat(date_to)
     if d1 < d0 or (d1 - d0).days > 92:
@@ -643,9 +765,15 @@ async def build_recap(user: dict, site_id: Optional[str], date_from: str, date_t
     by_truck: dict = {}
     for i in insps:
         by_truck.setdefault(i["truck_id"], []).append(i)
+    vc_ids = list({t.get("vehicle_category_id") for t in trucks if t.get("vehicle_category_id")})
+    vcs = {}
+    if vc_ids:
+        for vc in await db.vehicle_categories.find({"_id": {"$in": [oid(i) for i in vc_ids]}}).to_list(1000):
+            vcs[str(vc["_id"])] = vc
     rows = []
     for t in trucks:
         tid = str(t["_id"])
+        vc = vcs.get(t.get("vehicle_category_id") or "")
         cells = {}
         for i in by_truck.get(tid, []):
             c = cells.setdefault(i["inspection_date"], {"status": "ok", "count": 0, "inspection_id": None, "defects": 0})
@@ -657,7 +785,8 @@ async def build_recap(user: dict, site_id: Optional[str], date_from: str, date_t
         all_i = by_truck.get(tid, [])
         rows.append({
             "id": tid, "hull_number": t["hull_number"], "unit_vin_number": t.get("unit_vin_number"),
-            "brand": t.get("brand"), "model": t.get("model"), "drivetrain_layout": t.get("drivetrain_layout"), "cells": cells,
+            "brand": (vc or {}).get("brand"), "model": (vc or {}).get("model"),
+            "drivetrain_layout": (vc or {}).get("drivetrain_layout"), "cells": cells,
             "total_inspections": len(all_i), "inspected_days": len(cells),
             "defects_found": sum(i["defect_count"] for i in all_i),
             "defect_inspections": sum(1 for i in all_i if i["has_defect"]),
@@ -671,14 +800,14 @@ async def build_recap(user: dict, site_id: Optional[str], date_from: str, date_t
 
 @api_router.get("/recap")
 async def recap(site_id: Optional[str] = None, date_from: str = Query(...), date_to: str = Query(...),
-                user: dict = Depends(require_roles(*ADMIN_ROLES))):
+                user: dict = Depends(require_roles(*SITE_ADMIN_ROLES))):
     return await build_recap(user, site_id, date_from, date_to)
 
 
 @api_router.get("/recap/export")
 async def recap_export(kind: Literal["matrix", "summary"] = "matrix", site_id: Optional[str] = None,
                        date_from: str = Query(...), date_to: str = Query(...),
-                       user: dict = Depends(require_roles(*ADMIN_ROLES))):
+                       user: dict = Depends(require_roles(*SITE_ADMIN_ROLES))):
     data = await build_recap(user, site_id, date_from, date_to)
     buf = io.StringIO()
     w = csv.writer(buf)
@@ -769,7 +898,6 @@ async def purge_old_photos(run_id: str) -> dict:
 
 @api_router.post("/cron/purge-photos")
 async def cron_purge_photos(request: Request, background: BackgroundTasks):
-    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     header = request.headers.get("Authorization", "")
     expected = os.environ.get("WEBHOOK_CRON_SECRET", "")
     if not header.startswith("Bearer ") or not expected or not hmac.compare_digest(header[7:], expected):

@@ -124,10 +124,85 @@ async def migrate_003_backfill_inspection_types(db):
         )
 
 
+async def migrate_004_company_catalog_and_vehicle_categories(db):
+    """Promote masters to company scope, split vehicle category from truck list, rename admin role."""
+    # 1) Roles: admin -> site_admin
+    await db.users.update_many({"role": "admin"}, {"$set": {"role": "site_admin"}})
+
+    # 2) Company-scope categories / items / types: clear site_id, keep company_id; dedupe by company+name
+    for coll_name in ("inspection_categories", "inspection_items", "inspection_types"):
+        coll = getattr(db, coll_name)
+        by_key = {}
+        async for doc in coll.find({}):
+            company_id = doc.get("company_id")
+            if not company_id and doc.get("site_id"):
+                site = await db.sites.find_one({"_id": ObjectId(doc["site_id"]) if not isinstance(doc["site_id"], ObjectId) else doc["site_id"]})
+                if site:
+                    company_id = site.get("company_id")
+            name = doc.get("name") or ""
+            key = (company_id, name)
+            if key in by_key and by_key[key] != doc["_id"]:
+                # Prefer document that already has richer membership / no site split leftovers
+                keep = by_key[key]
+                await coll.delete_one({"_id": doc["_id"]})
+                if coll_name == "inspection_categories":
+                    # Remap truck/vehicle refs later; merge item_ids into keeper
+                    keeper = await coll.find_one({"_id": keep})
+                    merged = list(dict.fromkeys((keeper.get("item_ids") or []) + (doc.get("item_ids") or [])))
+                    await coll.update_one({"_id": keep}, {"$set": {"item_ids": merged, "company_id": company_id}, "$unset": {"site_id": ""}})
+                continue
+            by_key[key] = doc["_id"]
+            sets = {"company_id": company_id} if company_id else {}
+            unsets = {"site_id": ""}
+            if coll_name == "inspection_items":
+                unsets["category_id"] = ""
+            op = {"$unset": unsets}
+            if sets:
+                op["$set"] = sets
+            await coll.update_one({"_id": doc["_id"]}, op)
+
+    # 3) Build vehicle_categories from trucks and point trucks at them
+    async for truck in db.dump_trucks.find({}):
+        if truck.get("vehicle_category_id") and not truck.get("brand") and "category_ids" not in truck:
+            continue
+        company_id = truck.get("company_id")
+        brand = truck.get("brand") or ""
+        model = truck.get("model") or ""
+        layout = truck.get("drivetrain_layout") or ""
+        cat_ids = list(truck.get("category_ids") or [])
+        name = " · ".join(p for p in (brand, model, layout) if p) or f"Category for {truck.get('hull_number', 'unit')}"
+        existing = await db.vehicle_categories.find_one({
+            "company_id": company_id, "brand": brand or None, "model": model or None,
+            "drivetrain_layout": layout or None,
+        })
+        if existing:
+            vc_id = str(existing["_id"])
+            # Union inspection categories onto the shared vehicle category
+            merged = list(dict.fromkeys((existing.get("category_ids") or []) + cat_ids))
+            await db.vehicle_categories.update_one({"_id": existing["_id"]}, {"$set": {"category_ids": merged}})
+        else:
+            res = await db.vehicle_categories.insert_one({
+                "company_id": company_id,
+                "brand": brand or None,
+                "name": name,
+                "model": model or None,
+                "drivetrain_layout": layout or None,
+                "category_ids": cat_ids,
+                "is_active": True,
+            })
+            vc_id = str(res.inserted_id)
+        await db.dump_trucks.update_one(
+            {"_id": truck["_id"]},
+            {"$set": {"vehicle_category_id": vc_id},
+             "$unset": {"brand": "", "model": "", "drivetrain_layout": "", "category_ids": ""}},
+        )
+
+
 # (version, name, coroutine). Versions already stored in meta are skipped.
 MIGRATIONS = [
     (2, "assignment-fields", migrate_002_assignment_fields),
     (3, "backfill-inspection-types", migrate_003_backfill_inspection_types),
+    (4, "company-catalog-vehicle-categories", migrate_004_company_catalog_and_vehicle_categories),
 ]
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1][0]

@@ -49,7 +49,7 @@ export default function InspectionDetailPage() {
 
   if (!insp) return <p className="text-sm text-muted-foreground">{t("loading")}</p>;
   const defects = insp.results.filter((r) => r.status !== "OK");
-  const canApprove = user.role !== "driver";
+  const canApprove = ["superadmin", "company_admin", "site_admin"].includes(user.role);
 
   return (
     <div className="fade-up mx-auto max-w-3xl space-y-5" data-testid="inspection-detail-page">

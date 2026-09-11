@@ -10,7 +10,10 @@ import InspectionsPage from "./pages/InspectionsPage";
 import InspectionFormPage from "./pages/InspectionFormPage";
 import InspectionDetailPage from "./pages/InspectionDetailPage";
 import RecapPage from "./pages/RecapPage";
-import { CategoriesPage, CompaniesPage, InspectionTypesPage, ItemsPage, SitesPage, TrucksPage, UsersPage } from "./pages/MasterPages";
+import {
+  CategoriesPage, CompaniesPage, InspectionTypesPage, ItemsPage, SitesPage,
+  TrucksPage, UsersPage, VehicleCategoriesPage,
+} from "./pages/MasterPages";
 
 function Protected({ roles }) {
   const { user } = useAuth();
@@ -27,7 +30,8 @@ function PublicOnly({ children }) {
 }
 
 const SUPER = ["superadmin"];
-const ADMINS = ["superadmin", "admin"];
+const COMPANY_ADMINS = ["superadmin", "company_admin"];
+const SITE_ADMINS = ["superadmin", "company_admin", "site_admin"];
 
 export default function App() {
   return (
@@ -44,14 +48,17 @@ export default function App() {
                 <Route path="/inspections/:id" element={<InspectionDetailPage />} />
                 <Route element={<Protected roles={SUPER} />}>
                   <Route path="/companies" element={<CompaniesPage />} />
-                  <Route path="/sites" element={<SitesPage />} />
                 </Route>
-                <Route element={<Protected roles={ADMINS} />}>
-                  <Route path="/users" element={<UsersPage />} />
-                  <Route path="/trucks" element={<TrucksPage />} />
+                <Route element={<Protected roles={COMPANY_ADMINS} />}>
+                  <Route path="/sites" element={<SitesPage />} />
+                  <Route path="/vehicle-categories" element={<VehicleCategoriesPage />} />
                   <Route path="/categories" element={<CategoriesPage />} />
                   <Route path="/items" element={<ItemsPage />} />
                   <Route path="/inspection-types" element={<InspectionTypesPage />} />
+                </Route>
+                <Route element={<Protected roles={SITE_ADMINS} />}>
+                  <Route path="/users" element={<UsersPage />} />
+                  <Route path="/trucks" element={<TrucksPage />} />
                   <Route path="/recap" element={<RecapPage />} />
                 </Route>
               </Route>

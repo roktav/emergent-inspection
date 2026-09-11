@@ -91,7 +91,7 @@ export default function InspectionFormPage() {
   const { t } = useT();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { isSuper, sites, siteId, setSiteId } = useSiteScope();
+  const { sites, siteId, setSiteId, needsSitePicker } = useSiteScope();
   const [trucks, setTrucks] = useState([]);
   const [types, setTypes] = useState([]);
   const [truckId, setTruckId] = useState("");
@@ -104,13 +104,13 @@ export default function InspectionFormPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (isSuper && !siteId) return;
-    api.get("/trucks", { params: isSuper ? { site_id: siteId } : {} }).then((r) => setTrucks(r.data.filter((x) => x.is_active)));
-    api.get("/inspection-types", { params: isSuper ? { site_id: siteId } : {} }).then((r) => setTypes(r.data.filter((x) => x.is_active)));
+    if (needsSitePicker && !siteId) return;
+    api.get("/trucks", { params: needsSitePicker ? { site_id: siteId } : {} }).then((r) => setTrucks(r.data.filter((x) => x.is_active)));
+    api.get("/inspection-types").then((r) => setTypes(r.data.filter((x) => x.is_active)));
     setTruckId("");
     setTypeId("");
     setChecklist(null);
-  }, [isSuper, siteId]);
+  }, [needsSitePicker, siteId]);
 
   useEffect(() => {
     if (!truckId) return;
@@ -160,10 +160,10 @@ export default function InspectionFormPage() {
       <p className="mt-1 text-sm text-muted-foreground">{t("start_inspection_desc")}</p>
 
       <div className="mt-5 space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
-        {isSuper && <SiteSelect value={siteId} onChange={setSiteId} sites={sites} testId="form-site-select" />}
+        {needsSitePicker && <SiteSelect value={siteId} onChange={setSiteId} sites={sites} testId="form-site-select" />}
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("dump_trucks")}</label>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("vehicle_list")}</label>
             <Select value={truckId} onValueChange={setTruckId}>
               <SelectTrigger className="h-11" data-testid="form-truck-select"><SelectValue placeholder={t("select_truck")} /></SelectTrigger>
               <SelectContent className="bg-white">

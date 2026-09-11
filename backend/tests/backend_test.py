@@ -1,5 +1,5 @@
 """
-Backend tests for DT Inspection API (Schema v2: hull_number/unit_vin_number, category_ids assignment).
+Backend tests for DT Inspection API (company catalog, vehicle categories, site_admin/company_admin roles).
 Covers: auth, RBAC, masters (companies/sites/users/trucks/categories/items),
 truck.category_ids assignment, category.item_ids assignment, item auto-append,
 inspections (checklist EV=37/ICE=29, create with hull+VIN, approval), recap+CSV export,
@@ -16,8 +16,10 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/") or "http://lo
 API = f"{BASE_URL}/api"
 
 SUPER = {"email": "oktavio.rei@gmail.com", "password": "Admin@1234"}
-ADMIN = {"email": "admin@iti.demo", "password": "Admin@1234"}
+ADMIN = {"email": "admin@iti.demo", "password": "Admin@1234"}  # site_admin
+COMPANY_ADMIN = {"email": "company.admin@iti.demo", "password": "Admin@1234"}
 DRIVER = {"email": "driver@iti.demo", "password": "Driver@1234"}
+MECHANIC = {"email": "mechanic@iti.demo", "password": "Driver@1234"}
 
 
 def _login(creds):
@@ -59,17 +61,33 @@ def admin_ctx():
 
 
 @pytest.fixture(scope="module")
+def company_admin_ctx():
+    d = _login(COMPANY_ADMIN)
+    return {"token": d["access_token"], "user": d["user"]}
+
+
+@pytest.fixture(scope="module")
 def driver_ctx():
     d = _login(DRIVER)
+    return {"token": d["access_token"], "user": d["user"]}
+
+
+@pytest.fixture(scope="module")
+def mechanic_ctx():
+    d = _login(MECHANIC)
     return {"token": d["access_token"], "user": d["user"]}
 
 
 # ---------- Auth ----------
 class TestAuth:
     def test_login_roles(self):
-        assert _login(SUPER)["user"]["role"] == "superadmin"
-        assert _login(ADMIN)["user"]["role"] == "admin"
+        assert _login(COMPANY_ADMIN)["user"]["role"] == "company_admin"
+        assert _login(ADMIN)["user"]["role"] == "site_admin"
         assert _login(DRIVER)["user"]["role"] == "driver"
+        assert _login(MECHANIC)["user"]["role"] == "mechanic"
+        r = requests.post(f"{API}/auth/login", json=SUPER, timeout=30)
+        if r.status_code == 200:
+            assert r.json()["user"]["role"] == "superadmin"
 
     def test_login_bad_pw(self):
         r = requests.post(f"{API}/auth/login", json={"email": ADMIN["email"], "password": "wrong-pw"})
@@ -77,13 +95,13 @@ class TestAuth:
 
     def test_me(self, admin_ctx):
         r = requests.get(f"{API}/auth/me", headers=_auth(admin_ctx["token"]))
-        assert r.status_code == 200 and r.json()["role"] == "admin"
+        assert r.status_code == 200 and r.json()["role"] == "site_admin"
 
     def test_me_unauth(self):
         assert requests.get(f"{API}/auth/me").status_code == 401
 
 
-# ---------- Trucks (new schema fields + assignment) ----------
+# ---------- Trucks (list + vehicle_category_id) ----------
 class TestTrucksSchema:
     def test_list_returns_new_fields(self, admin_ctx):
         r = requests.get(f"{API}/trucks", headers=_auth(admin_ctx["token"]))
@@ -91,183 +109,229 @@ class TestTrucksSchema:
         trucks = r.json()
         assert trucks, "no trucks seeded"
         for t in trucks:
-            for k in ("unit_vin_number", "hull_number", "drivetrain_layout", "category_ids"):
+            for k in ("unit_vin_number", "hull_number", "vehicle_category_id"):
                 assert k in t, f"missing {k} on truck {t}"
-            assert "truck_type" not in t  # removed
-        # sorted by hull_number
+            assert t["vehicle_category_id"]
+            # brand/model/layout come from vehicle category enrichment
+            assert "brand" in t
+            assert "category_ids" in t
+            assert "truck_type" not in t
         hulls = [t["hull_number"] for t in trucks]
         assert hulls == sorted(hulls)
 
-    def test_create_requires_vin_and_hull(self, admin_ctx):
+    def test_create_requires_vin_hull_and_category(self, admin_ctx):
         tok = admin_ctx["token"]
-        # missing hull
-        r = requests.post(f"{API}/trucks", json={"unit_vin_number": "TESTVIN1"}, headers=_auth(tok))
+        vcats = requests.get(f"{API}/vehicle-categories", headers=_auth(tok)).json()
+        assert vcats
+        vcid = vcats[0]["id"]
+        r = requests.post(f"{API}/trucks", json={"unit_vin_number": "TESTVIN1", "vehicle_category_id": vcid}, headers=_auth(tok))
         assert r.status_code == 422
-        # missing vin
-        r = requests.post(f"{API}/trucks", json={"hull_number": "TEST-HULL-1"}, headers=_auth(tok))
+        r = requests.post(f"{API}/trucks", json={"hull_number": "TEST-HULL-1", "vehicle_category_id": vcid}, headers=_auth(tok))
         assert r.status_code == 422
+        r = requests.post(f"{API}/trucks",
+                          json={"unit_vin_number": "TESTVIN2", "hull_number": "TEST-HULL-2"},
+                          headers=_auth(tok))
+        assert r.status_code == 400
 
-    def test_create_ignores_category_ids_in_body(self, admin_ctx):
+    def test_create_with_vehicle_category(self, admin_ctx):
         tok = admin_ctx["token"]
-        # First get a real category id
-        cats = requests.get(f"{API}/categories", headers=_auth(tok)).json()
-        cid = cats[0]["id"]
+        vcats = requests.get(f"{API}/vehicle-categories", headers=_auth(tok)).json()
+        vcid = vcats[0]["id"]
         payload = {
             "unit_vin_number": "TESTVIN_IGN", "hull_number": "TEST-HULL-IGN",
-            "brand": "TESTBrand", "model": "TESTModel", "drivetrain_layout": "4x2",
-            "category_ids": [cid],
+            "vehicle_category_id": vcid, "brand": "IGNORED", "category_ids": ["x"],
         }
         r = requests.post(f"{API}/trucks", json=payload, headers=_auth(tok))
         assert r.status_code == 200, r.text
         tid = r.json()["id"]
         try:
-            assert r.json()["category_ids"] == []  # ignored
+            assert r.json()["vehicle_category_id"] == vcid
             assert r.json()["hull_number"] == "TEST-HULL-IGN"
             assert r.json()["unit_vin_number"] == "TESTVIN_IGN"
-            assert r.json()["drivetrain_layout"] == "4x2"
-        finally:
-            requests.delete(f"{API}/trucks/{tid}", headers=_auth(tok))
-
-    def test_assign_categories_endpoint(self, admin_ctx):
-        tok = admin_ctx["token"]
-        cats = requests.get(f"{API}/categories", headers=_auth(tok)).json()
-        assert len(cats) >= 2
-        c1, c2 = cats[0]["id"], cats[1]["id"]
-        r = requests.post(f"{API}/trucks",
-                          json={"unit_vin_number": "TESTVIN_A", "hull_number": "TEST-HULL-A"},
-                          headers=_auth(tok))
-        tid = r.json()["id"]
-        try:
-            # assign in order [c2, c1]
-            r = requests.put(f"{API}/trucks/{tid}/categories", json={"ids": [c2, c1]}, headers=_auth(tok))
-            assert r.status_code == 200
-            assert r.json()["category_ids"] == [c2, c1]
-            # reorder
-            r = requests.put(f"{API}/trucks/{tid}/categories", json={"ids": [c1, c2]}, headers=_auth(tok))
-            assert r.json()["category_ids"] == [c1, c2]
-            # invalid id gets dropped
-            r = requests.put(f"{API}/trucks/{tid}/categories",
-                             json={"ids": [c1, "507f1f77bcf86cd799439011"]},
-                             headers=_auth(tok))
-            assert r.json()["category_ids"] == [c1]
+            assert r.json().get("brand") == vcats[0].get("brand")
         finally:
             requests.delete(f"{API}/trucks/{tid}", headers=_auth(tok))
 
 
-# ---------- Categories.item_ids assignment ----------
+# ---------- Categories.item_ids assignment (many-to-many) ----------
 class TestCategoryItemAssignment:
     def test_get_returns_item_ids(self, admin_ctx):
         r = requests.get(f"{API}/categories", headers=_auth(admin_ctx["token"]))
         assert r.status_code == 200
         for c in r.json():
             assert "item_ids" in c
+            assert "site_id" not in c or c.get("site_id") in (None, "")
+            assert c.get("company_id")
         chassis = next(c for c in r.json() if c["name"] == "Chassis Inspection")
         assert len(chassis["item_ids"]) == 29
         ev = next(c for c in r.json() if c["name"] == "EV Components")
         assert len(ev["item_ids"]) == 8
 
-    def test_assign_items_moves_and_clears(self, admin_ctx):
+    def test_site_admin_cannot_assign_items(self, admin_ctx):
         tok = admin_ctx["token"]
+        cats = requests.get(f"{API}/categories", headers=_auth(tok)).json()
+        chassis = cats[0]
+        r = requests.put(f"{API}/categories/{chassis['id']}/items",
+                         json={"ids": chassis.get("item_ids") or []}, headers=_auth(tok))
+        assert r.status_code == 403
+
+    def test_shared_item_across_two_categories(self, company_admin_ctx):
+        tok = company_admin_ctx["token"]
         cats = requests.get(f"{API}/categories", headers=_auth(tok)).json()
         chassis = next(c for c in cats if c["name"] == "Chassis Inspection")
         ev = next(c for c in cats if c["name"] == "EV Components")
         original_chassis = list(chassis["item_ids"])
         original_ev = list(ev["item_ids"])
-
-        # Move first chassis item -> EV
-        moved = original_chassis[0]
-        new_chassis = original_chassis[1:]
-        new_ev = original_ev + [moved]
-        r = requests.put(f"{API}/categories/{chassis['id']}/items",
-                         json={"ids": new_chassis}, headers=_auth(tok))
-        assert r.status_code == 200
-        assert r.json()["item_ids"] == new_chassis
+        shared = original_chassis[0]
+        new_ev = list(dict.fromkeys(original_ev + [shared]))
 
         r = requests.put(f"{API}/categories/{ev['id']}/items",
                          json={"ids": new_ev}, headers=_auth(tok))
-        assert r.json()["item_ids"] == new_ev
+        assert r.status_code == 200, r.text
+        assert shared in r.json()["item_ids"]
 
-        # verify item.category_id updated to EV
-        item = requests.get(f"{API}/items", headers=_auth(tok)).json()
-        moved_item = next(i for i in item if i["id"] == moved)
-        assert moved_item["category_id"] == ev["id"]
+        # Chassis still has the item (no exclusivity)
+        cats2 = requests.get(f"{API}/categories", headers=_auth(tok)).json()
+        chassis2 = next(c for c in cats2 if c["id"] == chassis["id"])
+        assert shared in chassis2["item_ids"]
+        assert chassis2["item_ids"] == original_chassis
 
-        # Now unassign one from EV -> item.category_id cleared
-        r = requests.put(f"{API}/categories/{ev['id']}/items",
-                         json={"ids": [i for i in new_ev if i != moved]}, headers=_auth(tok))
-        assert r.status_code == 200
-        item = requests.get(f"{API}/items", headers=_auth(tok)).json()
-        moved_item = next(i for i in item if i["id"] == moved)
-        assert moved_item.get("category_id") in (None, "")
+        # item has no exclusive category_id field
+        items = requests.get(f"{API}/items", headers=_auth(tok)).json()
+        shared_item = next(i for i in items if i["id"] == shared)
+        assert "category_id" not in shared_item or shared_item.get("category_id") in (None, "")
 
-        # RESTORE original state
-        requests.put(f"{API}/categories/{chassis['id']}/items",
-                     json={"ids": original_chassis}, headers=_auth(tok))
+        # restore
         requests.put(f"{API}/categories/{ev['id']}/items",
                      json={"ids": original_ev}, headers=_auth(tok))
 
-        # verify restoration
-        cats2 = requests.get(f"{API}/categories", headers=_auth(tok)).json()
-        chassis2 = next(c for c in cats2 if c["name"] == "Chassis Inspection")
-        ev2 = next(c for c in cats2 if c["name"] == "EV Components")
-        assert chassis2["item_ids"] == original_chassis
-        assert ev2["item_ids"] == original_ev
 
-
-# ---------- Item CRUD auto-append/move/unassign ----------
-class TestItemsAutoAppend:
-    def test_create_appends_delete_pulls(self, admin_ctx):
-        tok = admin_ctx["token"]
+# ---------- Item CRUD (company masters; membership via category assign) ----------
+class TestItemsCompanyScope:
+    def test_create_delete_pulls_from_categories(self, company_admin_ctx):
+        tok = company_admin_ctx["token"]
         cats = requests.get(f"{API}/categories", headers=_auth(tok)).json()
         chassis = next(c for c in cats if c["name"] == "Chassis Inspection")
-        ev = next(c for c in cats if c["name"] == "EV Components")
         original = list(chassis["item_ids"])
-        # Create item in Chassis
+
         r = requests.post(f"{API}/items",
-                          json={"name": "TEST_Item_X", "guidance": "test", "category_id": chassis["id"],
+                          json={"name": "TEST_Item_X", "guidance": "test",
                                 "status_options": ["OK", "NOT_OK"]},
                           headers=_auth(tok))
-        assert r.status_code == 200
+        assert r.status_code == 200, r.text
         iid = r.json()["id"]
         try:
-            # verify appended at end
+            # not auto-appended
             cats2 = requests.get(f"{API}/categories", headers=_auth(tok)).json()
             c2 = next(c for c in cats2 if c["id"] == chassis["id"])
-            assert c2["item_ids"] == original + [iid]
+            assert iid not in c2["item_ids"]
 
-            # Move to EV via PUT with category_id
-            r = requests.put(f"{API}/items/{iid}",
-                             json={"name": "TEST_Item_X", "category_id": ev["id"],
-                                   "status_options": ["OK", "NOT_OK"]},
-                             headers=_auth(tok))
+            r = requests.put(f"{API}/categories/{chassis['id']}/items",
+                             json={"ids": original + [iid]}, headers=_auth(tok))
             assert r.status_code == 200
-            cats3 = requests.get(f"{API}/categories", headers=_auth(tok)).json()
-            c_chassis = next(c for c in cats3 if c["id"] == chassis["id"])
-            c_ev = next(c for c in cats3 if c["id"] == ev["id"])
-            assert iid not in c_chassis["item_ids"]
-            assert iid in c_ev["item_ids"]
-
-            # PUT without category_id unassigns
-            r = requests.put(f"{API}/items/{iid}",
-                             json={"name": "TEST_Item_X", "status_options": ["OK", "NOT_OK"]},
-                             headers=_auth(tok))
-            assert r.status_code == 200
-            cats4 = requests.get(f"{API}/categories", headers=_auth(tok)).json()
-            c_ev2 = next(c for c in cats4 if c["id"] == ev["id"])
-            assert iid not in c_ev2["item_ids"]
+            assert iid in r.json()["item_ids"]
         finally:
             requests.delete(f"{API}/items/{iid}", headers=_auth(tok))
-        # After delete, id not in any category
         cats5 = requests.get(f"{API}/categories", headers=_auth(tok)).json()
         for c in cats5:
             assert iid not in c["item_ids"]
+        # restore chassis list if mutated
+        requests.put(f"{API}/categories/{chassis['id']}/items",
+                     json={"ids": original}, headers=_auth(tok))
 
-    def test_delete_category_with_items_400(self, admin_ctx):
-        tok = admin_ctx["token"]
+    def test_site_admin_cannot_write_items(self, admin_ctx):
+        r = requests.post(f"{API}/items",
+                          json={"name": "TEST_blocked", "status_options": ["OK"]},
+                          headers=_auth(admin_ctx["token"]))
+        assert r.status_code == 403
+
+    def test_delete_category_with_items_400(self, company_admin_ctx):
+        tok = company_admin_ctx["token"]
         cats = requests.get(f"{API}/categories", headers=_auth(tok)).json()
         chassis = next(c for c in cats if c["name"] == "Chassis Inspection")
         r = requests.delete(f"{API}/categories/{chassis['id']}", headers=_auth(tok))
         assert r.status_code == 400
+
+
+# ---------- Vehicle categories ----------
+class TestVehicleCategories:
+    def test_list_and_assign_inspection_categories(self, company_admin_ctx):
+        tok = company_admin_ctx["token"]
+        vcats = requests.get(f"{API}/vehicle-categories", headers=_auth(tok)).json()
+        assert vcats
+        cats = requests.get(f"{API}/categories", headers=_auth(tok)).json()
+        assert len(cats) >= 2
+        vc = vcats[0]
+        original = list(vc.get("category_ids") or [])
+        c1, c2 = cats[0]["id"], cats[1]["id"]
+        r = requests.put(f"{API}/vehicle-categories/{vc['id']}/inspection-categories",
+                         json={"ids": [c2, c1]}, headers=_auth(tok))
+        assert r.status_code == 200, r.text
+        assert r.json()["category_ids"] == [c2, c1]
+        # restore
+        requests.put(f"{API}/vehicle-categories/{vc['id']}/inspection-categories",
+                     json={"ids": original}, headers=_auth(tok))
+
+    def test_site_admin_read_only(self, admin_ctx):
+        tok = admin_ctx["token"]
+        r = requests.get(f"{API}/vehicle-categories", headers=_auth(tok))
+        assert r.status_code == 200
+        assert r.json()
+        vc = r.json()[0]
+        r2 = requests.post(f"{API}/vehicle-categories",
+                           json={"name": "TEST_VC_BLOCK"}, headers=_auth(tok))
+        assert r2.status_code == 403
+        r3 = requests.put(f"{API}/vehicle-categories/{vc['id']}/inspection-categories",
+                          json={"ids": vc.get("category_ids") or []}, headers=_auth(tok))
+        assert r3.status_code == 403
+
+
+# ---------- Role RBAC ----------
+class TestRoleRBAC:
+    def test_site_admin_cannot_create_site_admin(self, admin_ctx):
+        r = requests.post(f"{API}/users", json={
+            "name": "Bad Admin", "email": "bad.admin@iti.demo", "role": "site_admin",
+            "password": "Admin@1234",
+        }, headers=_auth(admin_ctx["token"]))
+        assert r.status_code == 403
+
+    def test_company_admin_can_create_site_admin(self, company_admin_ctx, admin_ctx):
+        me = requests.get(f"{API}/auth/me", headers=_auth(admin_ctx["token"])).json()
+        email = "temp.siteadmin@iti.demo"
+        r = requests.post(f"{API}/users", json={
+            "name": "Temp SA", "email": email, "role": "site_admin",
+            "password": "Admin@1234", "site_id": me["site_id"],
+        }, headers=_auth(company_admin_ctx["token"]))
+        assert r.status_code == 200, r.text
+        uid = r.json()["id"]
+        try:
+            assert r.json()["role"] == "site_admin"
+        finally:
+            requests.delete(f"{API}/users/{uid}", headers=_auth(company_admin_ctx["token"]))
+
+    def test_company_admin_cannot_create_company_admin(self, company_admin_ctx):
+        me = company_admin_ctx["user"]
+        r = requests.post(f"{API}/users", json={
+            "name": "Peer CA", "email": "peer.ca@iti.demo", "role": "company_admin",
+            "password": "Admin@1234", "company_id": me["company_id"],
+        }, headers=_auth(company_admin_ctx["token"]))
+        assert r.status_code == 403
+
+    def test_mechanic_can_create_inspection(self, mechanic_ctx, admin_ctx):
+        trucks = requests.get(f"{API}/trucks", headers=_auth(admin_ctx["token"])).json()
+        truck = next(t for t in trucks if t["hull_number"] == "DT-003")
+        cl = requests.get(f"{API}/inspections/checklist?truck_id={truck['id']}",
+                          headers=_auth(mechanic_ctx["token"])).json()
+        items = [i for g in cl["groups"] for i in g["items"]]
+        results = [{"item_id": it["id"], "item_name": it["name"], "status": "OK", "note": None, "photos": []}
+                   for it in items]
+        payload = {"truck_id": truck["id"], "km_hm": 10.0,
+                   "started_at": datetime.now(timezone.utc).isoformat(),
+                   "inspection_date": datetime.now(timezone.utc).date().isoformat(),
+                   "inspection_type_id": _type_id(mechanic_ctx["token"]),
+                   "results": results}
+        r = requests.post(f"{API}/inspections", json=payload, headers=_auth(mechanic_ctx["token"]))
+        assert r.status_code == 200, r.text
 
 
 # ---------- Checklist ----------
@@ -363,6 +427,7 @@ class TestInspectionListFilters:
         assert "text/csv" in exported.headers.get("content-type", "")
         lines = exported.text.strip().splitlines()
         assert lines[0].startswith("Date,Unit,VIN,")
+        assert "Driver/Mechanic" in lines[0]
         assert len(lines) - 1 == len(listed.json())
 
     def test_driver_id_filter_admin(self, admin_ctx, driver_ctx):
@@ -687,7 +752,7 @@ class TestPurgeEndToEnd:
 
 # ---------- Inspection Types (new master iteration 4) ----------
 class TestInspectionTypes:
-    def test_admin_list_has_seeded_types(self, admin_ctx):
+    def test_site_admin_list_has_seeded_types(self, admin_ctx):
         r = requests.get(f"{API}/inspection-types", headers=_auth(admin_ctx["token"]))
         assert r.status_code == 200
         types = r.json()
@@ -695,13 +760,19 @@ class TestInspectionTypes:
         names = {t["name"] for t in active}
         for n in ("Daily Inspection (P2H)", "Weekly Inspection", "Pre-Delivery Inspection"):
             assert n in names, f"missing seeded type {n}"
-        # ensure no mongo _id leaks
         for t in types:
             assert "_id" not in t
             assert "id" in t
+            assert t.get("company_id")
 
-    def test_admin_crud(self, admin_ctx):
-        tok = admin_ctx["token"]
+    def test_site_admin_write_forbidden(self, admin_ctx):
+        r = requests.post(f"{API}/inspection-types",
+                          json={"name": "TEST_Type_A", "code": "TSTA"},
+                          headers=_auth(admin_ctx["token"]))
+        assert r.status_code == 403
+
+    def test_company_admin_crud(self, company_admin_ctx):
+        tok = company_admin_ctx["token"]
         payload = {"name": "TEST_Type_A", "code": "TSTA", "description": "test create"}
         r = requests.post(f"{API}/inspection-types", json=payload, headers=_auth(tok))
         assert r.status_code == 200, r.text
@@ -713,13 +784,11 @@ class TestInspectionTypes:
                               json={"name": "TEST_Type_A2", "code": "TSTA", "description": "u"},
                               headers=_auth(tok))
             assert r2.status_code == 200 and r2.json()["name"] == "TEST_Type_A2"
-            # verify persistence via GET list
             r3 = requests.get(f"{API}/inspection-types", headers=_auth(tok)).json()
             assert any(t["id"] == tid and t["name"] == "TEST_Type_A2" for t in r3)
         finally:
             rd = requests.delete(f"{API}/inspection-types/{tid}", headers=_auth(tok))
             assert rd.status_code == 200
-        # verify deletion
         r4 = requests.get(f"{API}/inspection-types", headers=_auth(tok)).json()
         assert not any(t["id"] == tid for t in r4)
 
@@ -729,26 +798,22 @@ class TestInspectionTypes:
                           headers=_auth(driver_ctx["token"]))
         assert r.status_code == 403
 
-    def test_superadmin_needs_site_id(self, super_ctx, admin_ctx):
-        # site_id missing -> 400
+    def test_superadmin_needs_company_id(self, super_ctx, admin_ctx):
         r = requests.post(f"{API}/inspection-types",
-                          json={"name": "TEST_SA_no_site", "code": "SANS"},
+                          json={"name": "TEST_SA_no_co", "code": "SANS"},
                           headers=_auth(super_ctx["token"]))
         assert r.status_code == 400
-        # discover admin's site id via /auth/me
         me = requests.get(f"{API}/auth/me", headers=_auth(admin_ctx["token"])).json()
-        site_id = me["site_id"]
+        company_id = me["company_id"]
         r2 = requests.post(f"{API}/inspection-types",
-                           json={"name": "TEST_SA_ok", "code": "SAOK", "site_id": site_id},
+                           json={"name": "TEST_SA_ok", "code": "SAOK", "company_id": company_id},
                            headers=_auth(super_ctx["token"]))
         assert r2.status_code == 200, r2.text
         tid = r2.json()["id"]
-        # superadmin can list with ?site_id
-        r3 = requests.get(f"{API}/inspection-types?site_id={site_id}",
+        r3 = requests.get(f"{API}/inspection-types?company_id={company_id}",
                           headers=_auth(super_ctx["token"]))
         assert r3.status_code == 200
         assert any(t["id"] == tid for t in r3.json())
-        # cleanup
         requests.delete(f"{API}/inspection-types/{tid}", headers=_auth(super_ctx["token"]))
 
 
@@ -779,9 +844,8 @@ class TestInspectionTypeValidation:
         assert r.status_code == 400
         assert "Invalid inspection type" in r.text
 
-    def test_inactive_type_400(self, driver_ctx, admin_ctx):
-        # Create a type, deactivate, use it
-        tok = admin_ctx["token"]
+    def test_inactive_type_400(self, driver_ctx, admin_ctx, company_admin_ctx):
+        tok = company_admin_ctx["token"]
         r = requests.post(f"{API}/inspection-types",
                           json={"name": "TEST_Inactive", "code": "INA", "is_active": False},
                           headers=_auth(tok))

@@ -10,27 +10,28 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 
 const NAV = [
-  { section: "dashboard", items: [{ to: "/", key: "dashboard", icon: LayoutDashboard, roles: ["superadmin", "admin", "driver"] }] },
+  { section: "dashboard", items: [{ to: "/", key: "dashboard", icon: LayoutDashboard, roles: ["superadmin", "company_admin", "site_admin", "driver", "mechanic"] }] },
   {
     section: "masters",
     items: [
       { to: "/companies", key: "companies", icon: Building2, roles: ["superadmin"] },
-      { to: "/sites", key: "sites", icon: MapPin, roles: ["superadmin"] },
-      { to: "/users", key: "users", icon: Users, roles: ["superadmin", "admin"] },
-      { to: "/trucks", key: "dump_trucks", icon: Truck, roles: ["superadmin", "admin"] },
-      { to: "/categories", key: "inspection_categories", icon: Layers, roles: ["superadmin", "admin"] },
-      { to: "/items", key: "inspection_items", icon: ListChecks, roles: ["superadmin", "admin"] },
-      { to: "/inspection-types", key: "inspection_types", icon: Tags, roles: ["superadmin", "admin"] },
+      { to: "/sites", key: "sites", icon: MapPin, roles: ["superadmin", "company_admin"] },
+      { to: "/users", key: "users", icon: Users, roles: ["superadmin", "company_admin", "site_admin"] },
+      { to: "/vehicle-categories", key: "vehicle_categories", icon: Tags, roles: ["superadmin", "company_admin"] },
+      { to: "/trucks", key: "vehicle_list", icon: Truck, roles: ["superadmin", "company_admin", "site_admin"] },
+      { to: "/categories", key: "inspection_categories", icon: Layers, roles: ["superadmin", "company_admin"] },
+      { to: "/items", key: "inspection_items", icon: ListChecks, roles: ["superadmin", "company_admin"] },
+      { to: "/inspection-types", key: "inspection_types", icon: Tags, roles: ["superadmin", "company_admin"] },
     ],
   },
   {
     section: "transactions",
     items: [
-      { to: "/inspections/new", key: "new_inspection", icon: PlusCircle, roles: ["superadmin", "admin", "driver"] },
-      { to: "/inspections", key: "inspections", icon: ClipboardCheck, roles: ["superadmin", "admin", "driver"] },
+      { to: "/inspections/new", key: "new_inspection", icon: PlusCircle, roles: ["superadmin", "company_admin", "site_admin", "driver", "mechanic"] },
+      { to: "/inspections", key: "inspections", icon: ClipboardCheck, roles: ["superadmin", "company_admin", "site_admin", "driver", "mechanic"] },
     ],
   },
-  { section: "reports", items: [{ to: "/recap", key: "recap", icon: BarChart3, roles: ["superadmin", "admin"] }] },
+  { section: "reports", items: [{ to: "/recap", key: "recap", icon: BarChart3, roles: ["superadmin", "company_admin", "site_admin"] }] },
 ];
 
 export function LangToggle() {

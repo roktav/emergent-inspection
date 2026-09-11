@@ -75,6 +75,7 @@ export default function LoginPage() {
           <div className="mt-8 rounded-2xl border bg-white/70 p-4 text-xs text-muted-foreground backdrop-blur" data-testid="demo-accounts">
             <p className="mb-2 font-semibold uppercase tracking-wider">{t("login_hint")}</p>
             <div className="grid gap-1 font-mono">
+              <button type="button" className="text-left hover:text-brand-dark" onClick={() => { setEmail("company.admin@iti.demo"); setPassword("Admin@1234"); }} data-testid="demo-company-admin-btn">company.admin@iti.demo / Admin@1234</button>
               <button type="button" className="text-left hover:text-brand-dark" onClick={() => { setEmail("admin@iti.demo"); setPassword("Admin@1234"); }} data-testid="demo-admin-btn">admin@iti.demo / Admin@1234</button>
               <button type="button" className="text-left hover:text-brand-dark" onClick={() => { setEmail("driver@iti.demo"); setPassword("Driver@1234"); }} data-testid="demo-driver-btn">driver@iti.demo / Driver@1234</button>
             </div>

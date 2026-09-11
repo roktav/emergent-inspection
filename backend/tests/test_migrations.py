@@ -141,6 +141,20 @@ class MemCol:
                 return copy.deepcopy(d)
         return None
 
+    async def insert_one(self, doc):
+        d = copy.deepcopy(doc)
+        if "_id" not in d:
+            d["_id"] = ObjectId()
+        self.docs.append(d)
+        return SimpleNamespace(inserted_id=d["_id"])
+
+    async def delete_one(self, q):
+        for i, d in enumerate(self.docs):
+            if _match(q, d):
+                self.docs.pop(i)
+                return
+        return None
+
     async def update_one(self, q, upd, upsert=False):
         for i, d in enumerate(self.docs):
             if _match(q, d):
@@ -170,33 +184,48 @@ def test_apply_migrations_is_additive_from_v1():
     item_id = ObjectId()
     insp_id = ObjectId()
     type_id = ObjectId()
+    site_id = ObjectId()
+    company_id = "co-1"
     db = SimpleNamespace(
         meta=MemCol([{"_id": "schema", "version": 1}]),
+        users=MemCol([{"_id": ObjectId(), "email": "a@x.com", "role": "admin", "site_id": str(site_id)}]),
+        sites=MemCol([{"_id": site_id, "company_id": company_id, "code": "IMIP", "name": "IMIP"}]),
         dump_trucks=MemCol([{
             "_id": truck_id,
+            "company_id": company_id,
+            "site_id": str(site_id),
             "hull_number": "DT-001",
+            "brand": "BYD",
+            "model": "T8",
+            "drivetrain_layout": "6x4",
             "category_id": str(cat_id),
         }]),
         inspection_items=MemCol([{
             "_id": item_id,
             "name": "Front Spring Hanger",
+            "company_id": company_id,
+            "site_id": str(site_id),
             "category_id": str(cat_id),
             "technical_guidance": "Retak",
         }]),
         inspection_categories=MemCol([{
             "_id": cat_id,
             "name": "Chassis Inspection",
+            "company_id": company_id,
+            "site_id": str(site_id),
             "item_ids": [],
         }]),
+        vehicle_categories=MemCol([]),
         inspections=MemCol([{
             "_id": insp_id,
-            "site_id": "site-1",
+            "site_id": str(site_id),
             "truck_hull_number": "DT-001",
             "inspection_type_id": None,
         }]),
         inspection_types=MemCol([{
             "_id": type_id,
-            "site_id": "site-1",
+            "site_id": str(site_id),
+            "company_id": company_id,
             "code": "P2H",
             "name": "Daily Inspection (P2H)",
         }]),
@@ -210,11 +239,20 @@ def test_apply_migrations_is_additive_from_v1():
     assert len(db.dump_trucks.docs) == 1
     assert len(db.inspections.docs) == 1
     truck = db.dump_trucks.docs[0]
-    assert truck["category_ids"] == [str(cat_id)]
     assert "category_id" not in truck
+    assert "category_ids" not in truck
+    assert truck.get("vehicle_category_id")
+    assert "brand" not in truck
+    assert len(db.vehicle_categories.docs) == 1
+    vc = db.vehicle_categories.docs[0]
+    assert str(cat_id) in vc["category_ids"]
+    assert db.users.docs[0]["role"] == "site_admin"
     item = db.inspection_items.docs[0]
     assert item["guidance"] == "Retak"
+    assert "category_id" not in item
+    assert "site_id" not in item
     assert str(item_id) in db.inspection_categories.docs[0]["item_ids"]
+    assert "site_id" not in db.inspection_categories.docs[0]
     insp = db.inspections.docs[0]
     assert insp["inspection_type_id"] == str(type_id)
     assert db.meta.docs[0]["version"] == LATEST_SCHEMA_VERSION
@@ -226,6 +264,9 @@ def test_apply_migrations_skips_when_already_latest():
         dump_trucks=MemCol([{"_id": ObjectId(), "hull_number": "KEEP"}]),
         inspection_items=MemCol([]),
         inspection_categories=MemCol([]),
+        vehicle_categories=MemCol([]),
+        users=MemCol([]),
+        sites=MemCol([]),
         inspections=MemCol([{"_id": ObjectId(), "site_id": "s"}]),
         inspection_types=MemCol([]),
     )

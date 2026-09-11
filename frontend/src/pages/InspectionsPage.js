@@ -19,8 +19,8 @@ const ALL = "all";
 export default function InspectionsPage() {
   const { t } = useT();
   const { user } = useAuth();
-  const { isSuper, sites, siteId, setSiteId } = useSiteScope();
-  const isAdmin = user?.role === "admin" || isSuper;
+  const { sites, siteId, setSiteId, needsSitePicker } = useSiteScope();
+  const isAdmin = ["site_admin", "company_admin", "superadmin"].includes(user?.role);
   const [rows, setRows] = useState([]);
   const [status, setStatus] = useState(ALL);
   const [truckId, setTruckId] = useState(ALL);
@@ -31,11 +31,11 @@ export default function InspectionsPage() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  const trucks = useLookup(`/trucks${isSuper && siteId ? `?site_id=${siteId}` : ""}`, !isSuper || !!siteId);
-  const types = useLookup(`/inspection-types${isSuper && siteId ? `?site_id=${siteId}` : ""}`, !isSuper || !!siteId);
-  const people = useLookup(`/users${isSuper && siteId ? `?site_id=${siteId}` : ""}`, isAdmin && (!isSuper || !!siteId));
+  const trucks = useLookup(`/trucks${needsSitePicker && siteId ? `?site_id=${siteId}` : ""}`, !needsSitePicker || !!siteId);
+  const types = useLookup(`/inspection-types`, true);
+  const people = useLookup(`/users${needsSitePicker && siteId ? `?site_id=${siteId}` : ""}`, isAdmin && (!needsSitePicker || !!siteId));
   const drivers = useMemo(
-    () => people.filter((p) => p.role === "driver" || p.role === "admin"),
+    () => people.filter((p) => p.role === "driver" || p.role === "mechanic"),
     [people],
   );
 
@@ -46,20 +46,20 @@ export default function InspectionsPage() {
   }, [siteId]);
 
   const params = useMemo(() => ({
-    site_id: isSuper ? siteId : undefined,
+    site_id: needsSitePicker ? siteId : undefined,
     status: status === ALL ? undefined : status,
     truck_id: truckId === ALL ? undefined : truckId,
     driver_id: driverId === ALL ? undefined : driverId,
     inspection_type_id: typeId === ALL ? undefined : typeId,
     date_from: from,
     date_to: to,
-  }), [isSuper, siteId, status, truckId, driverId, typeId, from, to]);
+  }), [needsSitePicker, siteId, status, truckId, driverId, typeId, from, to]);
 
   useEffect(() => {
-    if (isSuper && !siteId) return;
+    if (needsSitePicker && !siteId) return;
     setLoading(true);
     api.get("/inspections", { params }).then((r) => setRows(r.data)).finally(() => setLoading(false));
-  }, [isSuper, siteId, params]);
+  }, [needsSitePicker, siteId, params]);
 
   const exportCsv = async () => {
     setExporting(true);
@@ -80,7 +80,7 @@ export default function InspectionsPage() {
           <p className="mt-1 text-sm text-muted-foreground">{rows.length} {t("items")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" className="rounded-full" onClick={exportCsv} disabled={exporting || (isSuper && !siteId)} data-testid="inspections-export-btn">
+          <Button variant="outline" className="rounded-full" onClick={exportCsv} disabled={exporting || (needsSitePicker && !siteId)} data-testid="inspections-export-btn">
             <Download className="mr-1 h-4 w-4" /> {t("export_csv")}
           </Button>
           <Button asChild className="rounded-full" data-testid="inspections-new-btn">
@@ -90,7 +90,7 @@ export default function InspectionsPage() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-2xl border bg-white p-3 shadow-sm">
-        {isSuper && (
+        {needsSitePicker && (
           <label className="grid gap-1">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t("site")}</span>
             <SiteSelect value={siteId} onChange={setSiteId} sites={sites} testId="inspections-site-select" />
