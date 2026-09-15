@@ -2,6 +2,8 @@
 
 Daily dump-truck chassis inspection for site drivers: walk-around checklists, photo evidence, admin approval, and a site recap report.
 
+**Version 1.7.0** · 15 September 2026, 15:30 WIB
+
 Stack: **React 19** (CRA + craco) · **FastAPI** · **MongoDB 7**. Photos are stored on local disk, not a cloud object store.
 
 ## Prerequisites
@@ -136,3 +138,77 @@ docker-compose.yml
 ```
 
 Schema changes go in `backend/migrations.py` as numbered additive steps. Do not wipe Mongo collections to “migrate”.
+
+## Changelog
+
+Versions and timestamps follow git history. **1.7.0** is the latest release (15 Sep 2026, 15:30 WIB).
+
+### 1.7.0 — 15 Sep 2026, 15:30 WIB
+
+- Stamp GPS, place name, compass, datetime, and inspector name onto captured inspection photos
+- Scope inspection types to the selected site’s company (superadmin can no longer mix company A units with company B types)
+- Optional findings notes on OK checklist items (same textarea as Not OK; photos stay optional on OK)
+- On-device inspection drafts, leave-form save/discard, and **Inspeksi Saya** for drivers/mechanics
+
+### 1.6.0 — 11 Sep 2026, 12:59 WIB
+
+Commit `787393e`.
+
+- Scope inspection master data to the company
+- Split vehicle category from the site unit list
+- Add `company_admin`, `site_admin`, and `mechanic` roles
+- Keep units on one site; label inspectors as Driver/Mechanic
+
+### 1.5.0 — 9 Sep 2026, 16:38 WIB
+
+Commits `8d7545e`, `c87cc6b`.
+
+- Load inspection images with the Authorization header instead of putting session tokens in photo URLs
+- Filter the inspection list and CSV export by unit, type, driver, and date
+- Refresh the login splash so the inspector stays readable on the hero image
+
+### 1.4.0 — 8 Sep 2026, 14:42 WIB
+
+Commits `f067efe`, `3fc8b72`, `2fcce0e`, `707586d`, `98b4a76`.
+
+- Require company before site when creating users (avoids colliding site names across companies)
+- Replace destructive schema-version wipes with numbered, idempotent migrations
+- Document Docker and host setup in this README
+- Load `.env` when the Mongo client is created
+- Commit `yarn.lock`; ignore local Compose override
+
+### 1.3.0 — 7 Sep 2026, 15:37 WIB
+
+Commits `efbdbea`, `c2648be`.
+
+- Self-host on an Intel NUC: local-disk photo storage, Dockerfiles, Compose
+- Drop Emergent cloud object storage / `EMERGENT_LLM_KEY`
+- Trim backend dependencies to packages the app actually imports
+
+### 1.2.0 — 6 Sep 2026, 19:37 WIB
+
+Commit `84e820c`.
+
+- New inspection form defaults every item to OK; submit is ready once unit + KM/HM are filled
+- In-app camera on every item (optional on OK), client-side JPEG compression under 500 KB
+- Inspection detail: defect table first, then all items
+- Daily photo retention purge (default 90 days); superadmin can trigger it manually
+
+### 1.1.0 — 6 Sep 2026, 11:45 WIB
+
+Commit `1951ca8`.
+
+- Inspection items, categories, and dump-truck master data revision
+- Checklist built from each unit’s assigned categories (ICE/EV type flag removed)
+- Hull number as the identifier on recap, lists, and CSV
+
+### 1.0.0 — 6 Sep 2026, 11:06 WIB
+
+Commit `29189c4`.
+
+- MVP: company/site/user masters, walk-around inspection form, admin approve/reject, site vehicle recap, EN/ID, JWT auth
+- Demo data for IMIP Morowali
+
+### 0.1.0 — 3 Sep 2026, 20:27 WIB
+
+Commit `bb8f8c8`. Initial commit.

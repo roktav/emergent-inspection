@@ -28,7 +28,8 @@ const NAV = [
     section: "transactions",
     items: [
       { to: "/inspections/new", key: "new_inspection", icon: PlusCircle, roles: ["superadmin", "company_admin", "site_admin", "driver", "mechanic"] },
-      { to: "/inspections", key: "inspections", icon: ClipboardCheck, roles: ["superadmin", "company_admin", "site_admin", "driver", "mechanic"] },
+      { to: "/inspections", key: "inspections", icon: ClipboardCheck, roles: ["superadmin", "company_admin", "site_admin"] },
+      { to: "/my-inspections", key: "my_inspections", icon: ClipboardCheck, roles: ["driver", "mechanic"] },
     ],
   },
   { section: "reports", items: [{ to: "/recap", key: "recap", icon: BarChart3, roles: ["superadmin", "company_admin", "site_admin"] }] },
