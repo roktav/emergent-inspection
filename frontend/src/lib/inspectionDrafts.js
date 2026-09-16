@@ -46,3 +46,14 @@ export const formHasData = ({ truckId, typeId, kmHm, generalNote, results }) => 
     return false;
   });
 };
+
+export const answersDirty = ({ generalNote, results }) => {
+  if (String(generalNote || "").trim()) return true;
+  return Object.values(results || {}).some((r) => {
+    if (!r) return false;
+    if (r.status && r.status !== "OK") return true;
+    if (String(r.note || "").trim()) return true;
+    if ((r.photos || []).length) return true;
+    return false;
+  });
+};
