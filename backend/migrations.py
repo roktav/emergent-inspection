@@ -198,11 +198,20 @@ async def migrate_004_company_catalog_and_vehicle_categories(db):
         )
 
 
+async def migrate_005_excluded_item_ids(db):
+    """Ensure inspection types have an exclude list. Never drops types or inspections."""
+    async for doc in db.inspection_types.find({}):
+        if "excluded_item_ids" in doc:
+            continue
+        await db.inspection_types.update_one({"_id": doc["_id"]}, {"$set": {"excluded_item_ids": []}})
+
+
 # (version, name, coroutine). Versions already stored in meta are skipped.
 MIGRATIONS = [
     (2, "assignment-fields", migrate_002_assignment_fields),
     (3, "backfill-inspection-types", migrate_003_backfill_inspection_types),
     (4, "company-catalog-vehicle-categories", migrate_004_company_catalog_and_vehicle_categories),
+    (5, "excluded-item-ids", migrate_005_excluded_item_ids),
 ]
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1][0]

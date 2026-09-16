@@ -2,7 +2,7 @@
 
 Daily dump-truck chassis inspection for site drivers: walk-around checklists, photo evidence, admin approval, and a site recap report.
 
-**Version 1.7.0** · 15 September 2026, 15:30 WIB
+**Version 1.8.0** · 16 September 2026, 12:17 WIB
 
 Stack: **React 19** (CRA + craco) · **FastAPI** · **MongoDB 7**. Photos are stored on local disk, not a cloud object store.
 
@@ -131,9 +131,12 @@ The live HTTP suite in `tests/backend_test.py` expects an API at `REACT_APP_BACK
 
 ## Layout
 
+Rebuild spec: [docs/TECHNICAL_DESIGN.md](docs/TECHNICAL_DESIGN.md).
+
 ```
 backend/     FastAPI app (server.py), auth, seed, additive migrations, local storage
 frontend/    React SPA
+docs/        Technical design (rebuild)
 docker-compose.yml
 ```
 
@@ -141,7 +144,14 @@ Schema changes go in `backend/migrations.py` as numbered additive steps. Do not 
 
 ## Changelog
 
-Versions and timestamps follow git history. **1.7.0** is the latest release (15 Sep 2026, 15:30 WIB).
+Versions and timestamps follow git history. **1.8.0** is the latest release (16 Sep 2026, 12:17 WIB).
+
+### 1.8.0 — 16 Sep 2026, 12:17 WIB
+
+- Inspection types act as a company-level exclude list over the unit’s vehicle-category item pool (empty exclude = full checklist; additive schema v5)
+- New inspection loads the checklist only after unit and type are chosen; changing site, unit, or type with answers confirms then discards (KM/HM kept)
+- In-app camera torch toggle on live preview when the browser reports torch support
+- Rebuild spec: [docs/TECHNICAL_DESIGN.md](docs/TECHNICAL_DESIGN.md)
 
 ### 1.7.0 — 15 Sep 2026, 15:30 WIB
 

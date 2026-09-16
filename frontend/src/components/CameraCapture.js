@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Camera, RefreshCw, Check, X } from "lucide-react";
+import { Camera, RefreshCw, Check, X, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import { useT } from "../lib/i18n";
@@ -66,6 +66,8 @@ export function CameraCapture({ open, onClose, onCapture, testId }) {
   const [busy, setBusy] = useState(false);
   const [noCamera, setNoCamera] = useState(false);
   const [sensors, setSensors] = useState({});
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
 
   const stampLabels = useMemo(() => ({ gpsUnavailable: t("gps_unavailable"), msnm: t("msnm") }), [t]);
   const liveStamp = useMemo(
@@ -83,9 +85,24 @@ export function CameraCapture({ open, onClose, onCapture, testId }) {
     setPreviewUrl(null);
     stampAtShotRef.current = null;
     setNoCamera(false);
+    setTorchSupported(false);
+    setTorchOn(false);
     setSensors({});
     return startPhotoSensors((next) => setSensors(next), lang === "en" ? "en" : "id");
   }, [open, lang]);
+
+  const videoTrack = () => streamRef.current?.getVideoTracks?.()[0];
+
+  const applyTorch = async (on) => {
+    const track = videoTrack();
+    if (!track) return false;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: on }] });
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   useEffect(() => {
     if (!open) return undefined;
@@ -99,16 +116,52 @@ export function CameraCapture({ open, onClose, onCapture, testId }) {
         }
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
+        const track = stream.getVideoTracks()[0];
+        let torch = false;
+        try {
+          torch = !!track?.getCapabilities?.()?.torch;
+        } catch {
+          torch = false;
+        }
+        setTorchSupported(torch);
       } catch {
         setNoCamera(true);
+        setTorchSupported(false);
       }
     })();
     return () => {
       cancelled = true;
+      const track = streamRef.current?.getVideoTracks?.()[0];
+      if (track) {
+        try {
+          if (track.getCapabilities?.()?.torch) {
+            track.applyConstraints({ advanced: [{ torch: false }] }).catch(() => {});
+          }
+        } catch { /* ignore */ }
+      }
       streamRef.current?.getTracks().forEach((tr) => tr.stop());
       streamRef.current = null;
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open || shot || noCamera) return;
+    const video = videoRef.current;
+    if (video && streamRef.current && video.srcObject !== streamRef.current) {
+      video.srcObject = streamRef.current;
+    }
+  }, [open, shot, noCamera]);
+
+  const toggleFlash = async () => {
+    const next = !torchOn;
+    const ok = await applyTorch(next);
+    if (!ok) {
+      setTorchOn(false);
+      toast.error(t("flash_unavailable"));
+      return;
+    }
+    setTorchOn(next);
+  };
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -178,18 +231,38 @@ export function CameraCapture({ open, onClose, onCapture, testId }) {
             <Button className="mt-4 rounded-full" onClick={() => fileRef.current?.click()} data-testid={`${testId}-camera-fallback`}><Camera className="mr-2 h-4 w-4" /> {t("take_photo")}</Button>
             <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFile} data-testid={`${testId}-camera-input`} />
           </div>
-        ) : shot ? (
-          <img src={previewUrl} alt="captured" className="max-h-full max-w-full object-contain" />
         ) : (
           <>
-            <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
-            <StampHud stamp={liveStamp} testId={`${testId}-stamp-hud`} />
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className={`h-full w-full object-cover ${shot ? "hidden" : ""}`}
+            />
+            {!shot && <StampHud stamp={liveStamp} testId={`${testId}-stamp-hud`} />}
+            {shot && <img src={previewUrl} alt="captured" className="max-h-full max-w-full object-contain" />}
           </>
         )}
       </div>
       <div className="flex items-center justify-center gap-6 p-5" style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
         {!noCamera && !shot && (
-          <button onClick={capture} className="h-16 w-16 rounded-full border-4 border-white bg-white/20 transition-transform active:scale-95" aria-label={t("capture")} data-testid={`${testId}-camera-capture`} />
+          <>
+            {torchSupported && (
+              <button
+                type="button"
+                onClick={toggleFlash}
+                aria-pressed={torchOn}
+                aria-label={torchOn ? t("flash_on") : t("flash")}
+                data-testid={`${testId}-camera-flash`}
+                className={`flex h-12 w-12 items-center justify-center rounded-full bg-white/15 transition-colors ${torchOn ? "text-amber-300" : "text-white"}`}
+              >
+                <Zap className={`h-5 w-5 ${torchOn ? "fill-amber-300" : ""}`} />
+              </button>
+            )}
+            <button onClick={capture} className="h-16 w-16 rounded-full border-4 border-white bg-white/20 transition-transform active:scale-95" aria-label={t("capture")} data-testid={`${testId}-camera-capture`} />
+            {torchSupported && <span className="h-12 w-12" />}
+          </>
         )}
         {shot && (
           <>

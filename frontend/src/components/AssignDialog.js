@@ -6,10 +6,17 @@ import { useT } from "../lib/i18n";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 
-export function AssignDialog({ open, onClose, title, subtitle, options, initialIds, saveUrl, onSaved, testPrefix }) {
+export function AssignDialog({
+  open, onClose, title, subtitle, options, initialIds, saveUrl, onSaved, testPrefix,
+  assignedLabel, availableLabel, assignedEmpty, availableEmpty,
+}) {
   const { t } = useT();
   const [ids, setIds] = useState([]);
   const [saving, setSaving] = useState(false);
+  const assignedHeading = assignedLabel || t("assigned");
+  const availableHeading = availableLabel || t("available");
+  const assignedEmptyText = assignedEmpty || t("no_assigned");
+  const availableEmptyText = availableEmpty || t("no_available");
 
   useEffect(() => {
     if (open) setIds(initialIds || []);
@@ -50,9 +57,9 @@ export function AssignDialog({ open, onClose, title, subtitle, options, initialI
         </DialogHeader>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="rounded-xl border">
-            <p className="border-b bg-muted/60 px-3 py-2 text-xs font-semibold uppercase tracking-wide">{t("assigned")} · {assigned.length}</p>
+            <p className="border-b bg-muted/60 px-3 py-2 text-xs font-semibold uppercase tracking-wide">{assignedHeading} · {assigned.length}</p>
             <ul className="max-h-[50vh] divide-y overflow-y-auto" data-testid={`${testPrefix}-assigned-list`}>
-              {assigned.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted-foreground">{t("no_assigned")}</li>}
+              {assigned.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted-foreground">{assignedEmptyText}</li>}
               {assigned.map((id, i) => (
                 <li key={id} className="flex items-center gap-2 px-3 py-2" data-testid={`${testPrefix}-assigned-${id}`}>
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/30 font-heading text-xs font-semibold">{i + 1}</span>
@@ -68,9 +75,9 @@ export function AssignDialog({ open, onClose, title, subtitle, options, initialI
             </ul>
           </div>
           <div className="rounded-xl border">
-            <p className="border-b bg-muted/60 px-3 py-2 text-xs font-semibold uppercase tracking-wide">{t("available")} · {available.length}</p>
+            <p className="border-b bg-muted/60 px-3 py-2 text-xs font-semibold uppercase tracking-wide">{availableHeading} · {available.length}</p>
             <ul className="max-h-[50vh] divide-y overflow-y-auto" data-testid={`${testPrefix}-available-list`}>
-              {available.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted-foreground">{t("no_available")}</li>}
+              {available.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted-foreground">{availableEmptyText}</li>}
               {available.map((o) => (
                 <li key={o.id} className="flex items-center gap-2 px-3 py-2" data-testid={`${testPrefix}-available-${o.id}`}>
                   <div className="min-w-0 flex-1">

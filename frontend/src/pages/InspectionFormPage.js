@@ -5,7 +5,7 @@ import { Camera, X, Gauge, Clock, CheckCircle2, AlertTriangle } from "lucide-rea
 import { useAuth } from "../context/AuthContext";
 import { useT } from "../lib/i18n";
 import { api, errMsg } from "../lib/api";
-import { deleteDraft, formHasData, getDraft, listDrafts, upsertDraft } from "../lib/inspectionDrafts";
+import { answersDirty, deleteDraft, formHasData, getDraft, listDrafts, upsertDraft } from "../lib/inspectionDrafts";
 import { AuthImage } from "../components/AuthImage";
 import { StatusPill } from "../components/StatusPill";
 import { CameraCapture } from "../components/CameraCapture";
@@ -121,11 +121,13 @@ export default function InspectionFormPage() {
   const [startedAt, setStartedAt] = useState(() => new Date());
   const [submitting, setSubmitting] = useState(false);
   const [deviceDrafts, setDeviceDrafts] = useState([]);
+  const [scopePrompt, setScopePrompt] = useState(null);
 
   const snapshot = { siteId, truckId, typeId, kmHm, generalNote, startedAt, results };
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
   const hasData = formHasData(snapshot);
+  const dirtyAnswers = answersDirty(snapshot);
 
   const persistDraft = () => {
     if (!userId) return null;
@@ -170,6 +172,7 @@ export default function InspectionFormPage() {
     setKmHm(draft.km_hm ?? "");
     setGeneralNote(draft.general_note || "");
     if (draft.started_at) setStartedAt(new Date(draft.started_at));
+    if (!draft.truck_id || !draft.type_id) hydratingRef.current = false;
     if (!restoredRef.current) {
       restoredRef.current = true;
       toast.success(t("draft_resumed"));
@@ -193,9 +196,15 @@ export default function InspectionFormPage() {
   }, [needsSitePicker, siteId, companyId]);
 
   useEffect(() => {
-    if (!truckId) return;
+    if (!truckId || !typeId) {
+      if (!hydratingRef.current) {
+        setChecklist(null);
+        setResults({});
+      }
+      return;
+    }
     if (!hydratingRef.current) setResults({});
-    api.get("/inspections/checklist", { params: { truck_id: truckId } }).then((r) => {
+    api.get("/inspections/checklist", { params: { truck_id: truckId, inspection_type_id: typeId } }).then((r) => {
       setChecklist(r.data);
       const defaults = {};
       r.data.groups.forEach((g) => g.items.forEach((i) => (defaults[i.id] = { status: "OK", photos: [] })));
@@ -211,7 +220,7 @@ export default function InspectionFormPage() {
       hydratingRef.current = false;
       toast.error(errMsg(e));
     });
-  }, [truckId]);
+  }, [truckId, typeId]);
 
   useEffect(() => {
     if (!userId || hydratingRef.current || !hasData) return;
@@ -253,6 +262,41 @@ export default function InspectionFormPage() {
   const cancelLeave = () => {
     blocker.reset?.();
   };
+
+  const applyScopeChange = (kind, value) => {
+    pendingResultsRef.current = null;
+    setGeneralNote("");
+    if (kind === "site") {
+      setSiteId(value);
+      setTruckId("");
+      setTypeId("");
+      setChecklist(null);
+      setResults({});
+      return;
+    }
+    setChecklist(null);
+    setResults({});
+    if (kind === "truck") setTruckId(value);
+    if (kind === "type") setTypeId(value);
+  };
+
+  const requestScopeChange = (kind, value) => {
+    const current = kind === "site" ? siteId : kind === "truck" ? truckId : typeId;
+    if (!value || value === current) return;
+    if (hydratingRef.current || !dirtyAnswers) {
+      applyScopeChange(kind, value);
+      return;
+    }
+    setScopePrompt({ kind, value });
+  };
+
+  const confirmScopeChange = () => {
+    if (!scopePrompt) return;
+    applyScopeChange(scopePrompt.kind, scopePrompt.value);
+    setScopePrompt(null);
+  };
+
+  const cancelScopeChange = () => setScopePrompt(null);
 
   const submit = async () => {
     if (!ready) {
@@ -305,11 +349,11 @@ export default function InspectionFormPage() {
       )}
 
       <div className="mt-5 space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
-        {needsSitePicker && <SiteSelect value={siteId} onChange={setSiteId} sites={sites} testId="form-site-select" />}
+        {needsSitePicker && <SiteSelect value={siteId} onChange={(v) => requestScopeChange("site", v)} sites={sites} testId="form-site-select" />}
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("vehicle_list")}</label>
-            <Select value={truckId} onValueChange={setTruckId}>
+            <Select value={truckId} onValueChange={(v) => requestScopeChange("truck", v)}>
               <SelectTrigger className="h-11" data-testid="form-truck-select"><SelectValue placeholder={t("select_truck")} /></SelectTrigger>
               <SelectContent className="bg-white">
                 {trucks.map((tr) => (
@@ -320,7 +364,7 @@ export default function InspectionFormPage() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("inspection_type")}</label>
-            <Select value={typeId} onValueChange={setTypeId}>
+            <Select value={typeId} onValueChange={(v) => requestScopeChange("type", v)}>
               <SelectTrigger className="h-11" data-testid="form-type-select"><SelectValue placeholder={t("select_inspection_type")} /></SelectTrigger>
               <SelectContent className="bg-white">
                 {types.map((ty) => (
@@ -345,7 +389,11 @@ export default function InspectionFormPage() {
         </div>
       </div>
 
-      {truckId && checklist && items.length === 0 && (
+      {(!truckId || !typeId) && (
+        <div className="mt-5 rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground" data-testid="form-await-unit-type">{t("select_unit_and_type_hint")}</div>
+      )}
+
+      {truckId && typeId && checklist && items.length === 0 && (
         <div className="mt-5 rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground" data-testid="form-no-checklist">{t("no_categories_hint")}</div>
       )}
 
@@ -403,6 +451,19 @@ export default function InspectionFormPage() {
             <Button type="button" variant="outline" onClick={cancelLeave} data-testid="leave-cancel-btn">{t("cancel")}</Button>
             <Button type="button" variant="outline" className="border-red-300 text-red-700 hover:bg-red-50" onClick={confirmDiscardAndLeave} data-testid="leave-discard-btn">{t("discard_draft")}</Button>
             <Button type="button" onClick={confirmSaveAndLeave} data-testid="leave-save-btn">{t("save_draft")}</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!scopePrompt} onOpenChange={(open) => { if (!open) cancelScopeChange(); }}>
+        <AlertDialogContent data-testid="change-scope-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("change_scope_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("change_scope_desc")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:justify-end">
+            <Button type="button" variant="outline" onClick={cancelScopeChange} data-testid="change-scope-cancel-btn">{t("cancel")}</Button>
+            <Button type="button" className="bg-red-600 hover:bg-red-700" onClick={confirmScopeChange} data-testid="change-scope-confirm-btn">{t("discard_answers")}</Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
