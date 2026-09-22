@@ -1,3 +1,6 @@
+import { Capacitor } from "@capacitor/core";
+import { Geolocation } from "@capacitor/geolocation";
+
 const GEOCODE_CELL = 0.00045;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -58,45 +61,128 @@ const headingFromOrientation = (event) => {
   return (360 - event.alpha + orient + 360) % 360;
 };
 
-export function startPhotoSensors(onChange, lang = "id") {
+const positionOptions = (high) => ({
+  enableHighAccuracy: high,
+  timeout: high ? 20000 : 15000,
+  maximumAge: high ? 10000 : 60000,
+  enableLocationFallback: true,
+  interval: 4000,
+  minimumUpdateInterval: 2000,
+});
+
+const emptyReading = () => ({
+  lat: null,
+  lon: null,
+  altitude: null,
+  heading: null,
+  location: [],
+});
+
+let latestReading = emptyReading();
+let sensorListeners = new Set();
+let stopSensorWatch = null;
+let sensorLang = "id";
+
+const publishReading = (reading) => {
+  latestReading = reading;
+  sensorListeners.forEach((fn) => {
+    try { fn(reading); } catch { /* a listener must not stop the watch */ }
+  });
+};
+
+const hasCoords = (reading) => reading?.lat != null && reading?.lon != null;
+
+const secureEnoughForWebGps = () =>
+  typeof window !== "undefined" && window.isSecureContext && !!navigator.geolocation;
+
+async function ensureLocationPermission() {
+  if (!Capacitor.isNativePlatform()) return secureEnoughForWebGps();
+  try {
+    let status = await Geolocation.checkPermissions();
+    if (status.location === "granted" || status.coarseLocation === "granted") return true;
+    status = await Geolocation.requestPermissions();
+    return status.location === "granted" || status.coarseLocation === "granted";
+  } catch {
+    // Location services can be off. Still start the watch so Android can ask to enable them.
+    return true;
+  }
+}
+
+function watchSensors() {
+  let stopped = false;
   let watchId = null;
-  let heading = null;
-  let lat = null;
-  let lon = null;
-  let altitude = null;
+  let heading = latestReading.heading;
+  let lat = latestReading.lat;
+  let lon = latestReading.lon;
+  let altitude = latestReading.altitude;
   let geoHeading = null;
-  let location = [];
+  let location = latestReading.location || [];
   let geoSeq = 0;
+  let triedCoarse = false;
+
+  const snapshot = () => ({
+    lat: lat ?? latestReading.lat,
+    lon: lon ?? latestReading.lon,
+    altitude: altitude ?? latestReading.altitude,
+    heading: heading ?? geoHeading ?? latestReading.heading,
+    location: location?.length ? location : latestReading.location,
+  });
 
   const emit = () => {
-    onChange({
-      lat,
-      lon,
-      altitude,
-      heading: heading ?? geoHeading,
-      location,
+    if (!stopped) publishReading(snapshot());
+  };
+
+  const onFix = (pos) => {
+    lat = pos.coords.latitude;
+    lon = pos.coords.longitude;
+    altitude = pos.coords.altitude;
+    geoHeading = typeof pos.coords.heading === "number" && !Number.isNaN(pos.coords.heading) ? pos.coords.heading : null;
+    emit();
+    const seq = ++geoSeq;
+    reverseGeocode(lat, lon, sensorLang).then((lines) => {
+      if (stopped || seq !== geoSeq) return;
+      location = lines;
+      emit();
     });
   };
 
-  if (navigator.geolocation) {
-    watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        lat = pos.coords.latitude;
-        lon = pos.coords.longitude;
-        altitude = pos.coords.altitude;
-        geoHeading = typeof pos.coords.heading === "number" && !Number.isNaN(pos.coords.heading) ? pos.coords.heading : null;
-        emit();
-        const seq = ++geoSeq;
-        reverseGeocode(lat, lon, lang).then((lines) => {
-          if (seq !== geoSeq) return;
-          location = lines;
-          emit();
-        });
-      },
-      () => emit(),
-      { enableHighAccuracy: true, maximumAge: 4000, timeout: 12000 }
-    );
-  }
+  const arm = async (high) => {
+    if (stopped) return;
+    let retired = false;
+    let id;
+    try {
+      id = await Geolocation.watchPosition(positionOptions(high), (pos, err) => {
+        if (stopped || retired) return;
+        if (pos?.coords && pos.coords.latitude != null && pos.coords.longitude != null) {
+          onFix(pos);
+          return;
+        }
+        const denied = err?.code === 1 || err?.code === "OS-PLUG-GLOC-0003";
+        if (err && high && !triedCoarse && !denied) {
+          triedCoarse = true;
+          retired = true;
+          if (id) Geolocation.clearWatch({ id }).catch(() => {});
+          arm(false);
+        }
+      });
+    } catch {
+      if (!stopped && high && !triedCoarse) {
+        triedCoarse = true;
+        arm(false);
+      }
+      return;
+    }
+    if (stopped || retired) {
+      Geolocation.clearWatch({ id }).catch(() => {});
+      return;
+    }
+    watchId = id;
+  };
+
+  ensureLocationPermission().then((ok) => {
+    if (stopped || !ok) return;
+    arm(true);
+  });
 
   const onOrient = (event) => {
     const next = headingFromOrientation(event);
@@ -120,11 +206,65 @@ export function startPhotoSensors(onChange, lang = "id") {
   emit();
 
   return () => {
+    stopped = true;
     geoSeq += 1;
-    if (watchId != null && navigator.geolocation) navigator.geolocation.clearWatch(watchId);
+    if (watchId) Geolocation.clearWatch({ id: watchId }).catch(() => {});
     window.removeEventListener("deviceorientationabsolute", onOrient, true);
     window.removeEventListener("deviceorientation", onOrient, true);
   };
+}
+
+export function startPhotoSensors(onChange, lang = "id") {
+  sensorLang = lang || "id";
+  sensorListeners.add(onChange);
+  onChange(latestReading);
+  if (!stopSensorWatch) stopSensorWatch = watchSensors();
+  return () => {
+    sensorListeners.delete(onChange);
+    if (sensorListeners.size === 0 && stopSensorWatch) {
+      const stop = stopSensorWatch;
+      stopSensorWatch = null;
+      stop();
+    }
+  };
+}
+
+export async function ensureCoords(sensors, lang = "id") {
+  sensorLang = lang || sensorLang;
+  const current = hasCoords(sensors) ? sensors : latestReading;
+  if (hasCoords(current)) {
+    if ((current.location || []).length) return current;
+    const location = await reverseGeocode(current.lat, current.lon, sensorLang);
+    const next = { ...latestReading, ...current, location };
+    publishReading(next);
+    return next;
+  }
+  if (!Capacitor.isNativePlatform() && !secureEnoughForWebGps()) return current || emptyReading();
+  const allowed = await ensureLocationPermission();
+  if (!allowed) return current || emptyReading();
+  let pos = null;
+  try {
+    pos = await Geolocation.getCurrentPosition({ ...positionOptions(true), timeout: 8000, maximumAge: 30000 });
+  } catch {
+    try {
+      pos = await Geolocation.getCurrentPosition({ ...positionOptions(false), timeout: 8000, maximumAge: 120000 });
+    } catch {
+      pos = null;
+    }
+  }
+  if (pos?.coords?.latitude == null || pos?.coords?.longitude == null) return current || emptyReading();
+  const geoHeading = typeof pos.coords.heading === "number" && !Number.isNaN(pos.coords.heading) ? pos.coords.heading : null;
+  const location = await reverseGeocode(pos.coords.latitude, pos.coords.longitude, sensorLang);
+  const next = {
+    ...latestReading,
+    lat: pos.coords.latitude,
+    lon: pos.coords.longitude,
+    altitude: pos.coords.altitude,
+    heading: latestReading.heading ?? geoHeading,
+    location,
+  };
+  publishReading(next);
+  return next;
 }
 
 export const stampLines = (stamp) => {

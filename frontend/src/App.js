@@ -1,4 +1,4 @@
-import { Navigate, Outlet, RouterProvider, createBrowserRouter } from "react-router-dom";
+import { Navigate, Outlet, RouterProvider, createBrowserRouter, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import "@/App.css";
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -17,17 +17,21 @@ import {
   TrucksPage, UsersPage, VehicleCategoriesPage,
 } from "./pages/MasterPages";
 
+const safeNext = (value) => (value && value.startsWith("/") && !value.startsWith("//") ? value : "/");
+
 function Protected({ roles }) {
   const { user } = useAuth();
+  const location = useLocation();
   if (user === null) return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Loading...</div>;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />;
   return <Outlet />;
 }
 
 function PublicOnly({ children }) {
   const { user } = useAuth();
-  if (user) return <Navigate to="/" replace />;
+  const location = useLocation();
+  if (user) return <Navigate to={safeNext(new URLSearchParams(location.search).get("next"))} replace />;
   return children;
 }
 

@@ -1,14 +1,14 @@
-# Panduan Pengguna — Inspeksi DT
+# Panduan Pengguna — Inspeksi Aset
 
 **Inline Technology International**  
-Versi aplikasi: **1.9.0**  
+Versi aplikasi: **1.10.0**  
 Tanggal dokumen: 22 September 2026
 
 ---
 
 ## Cara memakai dokumen ini
 
-1. Buka aplikasi **Inspeksi DT**.
+1. Buka aplikasi **Inspeksi Aset**.
 2. Di pojok kanan atas, pilih **ID** (bukan EN) agar label di layar sama dengan panduan ini.
 3. Nama tombol, menu, dan kolom di dokumen ini dikutip **persis** dari antarmuka.
 
@@ -18,7 +18,7 @@ Jika bahasa layar masih Inggris, klik **ID** pada sakelar **EN / ID**. Pilihan b
 
 ## 1. Tentang aplikasi
 
-**Inspeksi DT** adalah aplikasi inspeksi harian chassis dump truck untuk driver dan mekanik di site. Dengan aplikasi ini Anda dapat:
+**Inspeksi Aset** adalah aplikasi inspeksi harian chassis dump truck untuk driver dan mekanik di site. Dengan aplikasi ini Anda dapat:
 
 - mengisi checklist walk-around (keliling unit);
 - merekam foto temuan (dengan cap GPS, waktu, dan nama pemeriksa);
@@ -26,7 +26,7 @@ Jika bahasa layar masih Inggris, klik **ID** pada sakelar **EN / ID**. Pilihan b
 - meminta persetujuan admin site;
 - melihat laporan dan rekap kendaraan per site.
 
-Setelah **Kirim Inspeksi**, data di server tidak dapat diubah. Tidak ada ekspor PDF per inspeksi atau pemulihan kata sandi mandiri. Draf hanya tersimpan di peramban perangkat itu (bukan di server).
+Setelah **Kirim Inspeksi**, data di server tidak dapat diubah. Dari halaman detail, **Ekspor PDF** mengunduh laporan inspeksi itu (header, checklist, dan foto). Tidak ada pemulihan kata sandi mandiri. Draf hanya tersimpan di peramban perangkat itu (bukan di server).
 
 ---
 
@@ -65,7 +65,7 @@ Jika gagal, muncul pesan **Gagal masuk**. Setelah **5 percobaan gagal**, akun di
 
 Tidak ada tautan lupa kata sandi. Perubahan kata sandi dilakukan admin di **Pengguna & Peran** (field **Kata sandi**; kosongkan untuk mempertahankan kata sandi saat ini). Minimum 6 karakter.
 
-![Halaman masuk Inspeksi DT](images/01-login.png)
+![Halaman masuk Inspeksi Aset](images/01-login.png)
 
 *Gambar 1. Halaman masuk. Pilih **ID** di sakelar bahasa sebelum mulai bekerja.*
 
@@ -315,7 +315,7 @@ Di banyak halaman master, pilih **Perusahaan** (dan kadang **Site**) di header s
 | **Ditolak** | Admin menolak |
 | **Menunggu** | Masih menunggu persetujuan (kartu beranda) |
 
-Hanya admin (site, perusahaan, superadmin) yang menyetujui. Ekspor yang tersedia: **Ekspor CSV**, **Ekspor CSV Matriks**, **Ekspor CSV Ringkasan**. Tidak ada ekspor PDF per inspeksi.
+Hanya admin (site, perusahaan, superadmin) yang menyetujui. Ekspor daftar: **Ekspor CSV**, **Ekspor CSV Matriks**, **Ekspor CSV Ringkasan**. Di detail inspeksi, **Ekspor PDF** mengunduh laporan satu inspeksi: header, checklist tanpa kolom kategori, dan foto pada baris item. Tautan di PDF membuka kembali detail inspeksi itu, tempat foto dapat dibuka seperti di aplikasi.
 
 Jika ada beberapa inspeksi pada unit yang sama di hari yang sama, sel matriks mengikuti inspeksi terakhir hari itu; sel merah jika ada temuan.
 

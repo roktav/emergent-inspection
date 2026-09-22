@@ -6,7 +6,7 @@ import { Camera as CapCamera, CameraResultType, CameraSource } from "@capacitor/
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import { useT } from "../lib/i18n";
-import { buildStamp, drawPhotoStamp, stampLines, startPhotoSensors } from "../lib/photoStamp";
+import { buildStamp, drawPhotoStamp, ensureCoords, stampLines, startPhotoSensors } from "../lib/photoStamp";
 import { Button } from "./ui/button";
 
 const MAX_BYTES = 500 * 1024;
@@ -162,7 +162,14 @@ export function CameraCapture({ open, onClose, onCapture, testId }) {
         const src = photo.webPath || (photo.path ? Capacitor.convertFileSrc(photo.path) : null);
         if (!src) throw new Error("no photo");
         const blob = await (await fetch(src)).blob();
-        stampAtShotRef.current = buildStamp({ sensors: sensorsRef.current, takenBy: user?.name, labels: stampLabels });
+        if (cancelled) return;
+        setBusy(true);
+        try {
+          stampAtShotRef.current = await currentStamp();
+        } finally {
+          if (!cancelled) setBusy(false);
+        }
+        if (cancelled) return;
         setShot(blob);
         try {
           const preview = await compressImage(blob, MAX_BYTES, stampAtShotRef.current);
@@ -206,7 +213,12 @@ export function CameraCapture({ open, onClose, onCapture, testId }) {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
 
-  const currentStamp = () => buildStamp({ sensors: sensorsRef.current, takenBy: user?.name, labels: stampLabels });
+  const stampLang = lang === "en" ? "en" : "id";
+  const currentStamp = async () => {
+    const sensorsNow = await ensureCoords(sensorsRef.current, stampLang);
+    sensorsRef.current = sensorsNow;
+    return buildStamp({ sensors: sensorsNow, takenBy: user?.name, labels: stampLabels });
+  };
 
   const capture = () => {
     const v = videoRef.current;
@@ -217,7 +229,7 @@ export function CameraCapture({ open, onClose, onCapture, testId }) {
     canvas.getContext("2d").drawImage(v, 0, 0);
     canvas.toBlob(async (b) => {
       if (!b) return;
-      stampAtShotRef.current = currentStamp();
+      stampAtShotRef.current = await currentStamp();
       setShot(b);
       try {
         const preview = await compressImage(b, MAX_BYTES, stampAtShotRef.current);
@@ -237,7 +249,7 @@ export function CameraCapture({ open, onClose, onCapture, testId }) {
   const finish = async (blob) => {
     setBusy(true);
     try {
-      const compressed = await compressImage(blob, MAX_BYTES, stampAtShotRef.current || currentStamp());
+      const compressed = await compressImage(blob, MAX_BYTES, stampAtShotRef.current || await currentStamp());
       await onCapture(compressed);
       onClose();
     } catch (e) {
@@ -247,11 +259,11 @@ export function CameraCapture({ open, onClose, onCapture, testId }) {
     }
   };
 
-  const onFile = (e) => {
+  const onFile = async (e) => {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (f) {
-      stampAtShotRef.current = currentStamp();
+      stampAtShotRef.current = await currentStamp();
       finish(f);
     }
   };
@@ -282,7 +294,7 @@ export function CameraCapture({ open, onClose, onCapture, testId }) {
               />
             )}
             {!shot && !isNative && <StampHud stamp={liveStamp} testId={`${testId}-stamp-hud`} />}
-            {isNative && !shot && <p className="px-8 text-center text-sm text-white/80">{t("take_photo")}…</p>}
+            {isNative && !shot && <p className="px-8 text-center text-sm text-white/80">{busy ? t("compressing") : `${t("take_photo")}…`}</p>}
             {shot && <img src={previewUrl} alt="captured" className="max-h-full max-w-full object-contain" />}
           </>
         )}

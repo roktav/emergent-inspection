@@ -15,6 +15,7 @@ import { activeTrucks, activeTypes, checklistFromSnapshot, getSnapshot } from ".
 import { AuthImage } from "../components/AuthImage";
 import { StatusPill } from "../components/StatusPill";
 import { CameraCapture } from "../components/CameraCapture";
+import { startPhotoSensors } from "../lib/photoStamp";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
@@ -112,8 +113,12 @@ function ItemCard({ item, index, result, onChange }) {
 const newDraftId = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `draft-${Date.now()}`);
 
 export default function InspectionFormPage() {
-  const { t } = useT();
+  const { t, lang } = useT();
   const { user } = useAuth();
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() && !window.isSecureContext) toast.error(t("gps_insecure"));
+    return startPhotoSensors(() => {}, lang === "en" ? "en" : "id");
+  }, [lang, t]);
   const { reloadLocal } = useOffline();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

@@ -2,7 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "id.co.iti.inspeksidt",
-  appName: "Inspeksi DT",
+  appName: "Asset Inspection",
   webDir: "build",
   server: {
     androidScheme: "https",

@@ -1,8 +1,8 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 const dict = {
   en: {
-    app_name: "DT Inspection",
+    app_name: "Asset Inspection",
     tagline: "Daily dump truck chassis inspection for site drivers",
     login_title: "Sign in to your account",
     email: "Email",
@@ -114,6 +114,9 @@ const dict = {
     from: "From",
     to: "To",
     export_csv: "Export CSV",
+    export_pdf: "Export PDF",
+    exporting_pdf: "Exporting...",
+    pdf_open_inspection: "Open this inspection to view photos",
     matrix: "Daily Matrix",
     summary: "Summary",
     total_inspections: "Total Inspections",
@@ -241,10 +244,11 @@ const dict = {
     save_draft: "Save draft",
     draft_resumed: "Draft restored on this device",
     gps_unavailable: "GPS unavailable",
+    gps_insecure: "GPS needs HTTPS. Open this site with https, or use the Android app.",
     msnm: "m",
   },
   id: {
-    app_name: "Inspeksi DT",
+    app_name: "Inspeksi Aset",
     tagline: "Inspeksi harian chassis dump truck untuk driver site",
     login_title: "Masuk ke akun Anda",
     email: "Email",
@@ -356,6 +360,9 @@ const dict = {
     from: "Dari",
     to: "Sampai",
     export_csv: "Ekspor CSV",
+    export_pdf: "Ekspor PDF",
+    exporting_pdf: "Mengekspor...",
+    pdf_open_inspection: "Buka inspeksi ini untuk melihat foto",
     matrix: "Matriks Harian",
     summary: "Ringkasan",
     total_inspections: "Total Inspeksi",
@@ -483,6 +490,7 @@ const dict = {
     save_draft: "Simpan draf",
     draft_resumed: "Draf dipulihkan di perangkat ini",
     gps_unavailable: "GPS tidak tersedia",
+    gps_insecure: "GPS membutuhkan HTTPS. Buka situs dengan https, atau gunakan aplikasi Android.",
     msnm: "msnm",
   },
 };
@@ -498,6 +506,9 @@ export function LangProvider({ children }) {
     setLangState(l);
   }, []);
   const t = useCallback((k) => dict[lang]?.[k] ?? dict.en[k] ?? k, [lang]);
+  useEffect(() => {
+    document.title = `${t("app_name")} · Inline Technology`;
+  }, [t]);
   const value = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
   return <LangCtx.Provider value={value}>{children}</LangCtx.Provider>;
 }

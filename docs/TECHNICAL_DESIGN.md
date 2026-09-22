@@ -1,10 +1,10 @@
-# DT Inspection — Technical Design Document
+# Asset Inspection — Technical Design Document
 
 Rebuild spec for the current application. A developer who has never opened this repo should be able to reimplement the product from this document plus the OpenAPI surface at `/docs`.
 
 This is a **Technical Design Document**, not a test-driven-development guide. It describes **what the system must do**, not how every file is laid out today.
 
-**Product version captured:** Capacitor Android shell, 30-day refresh tokens, field snapshot + outbox. README **1.9.0** (22 Sep 2026, 11:21 WIB).
+**Product version captured:** Asset Inspection (Indonesian: Inspeksi Aset). Inspection PDF export, device GPS stamp. README **1.10.0** (22 Sep 2026, 20:39 WIB).
 
 ---
 
@@ -502,7 +502,11 @@ In-app overlay (not the OS camera, unless fallback):
 5. **Stamp burned into the pixels** before upload: datetime, lat/lon or “GPS unavailable”, up to two reverse-geocode lines (BigDataCloud, ~50 m cache), altitude + inspector name, compass rose. GPS/heading are **client-only**.
 6. If `getUserMedia` fails: file input `accept="image/*" capture="environment"` — no flash promise.
 7. On the **website while online**, `POST /uploads` immediately and store the returned path. On **native** (and on the web while offline), write the JPEG to IndexedDB and keep `{ localId }` until outbox sync.
-8. Native capture uses Capacitor `Camera.getPhoto`, then the same stamp + ≤ 500 KB compress. The OS camera UI replaces the in-app torch preview.
+8. Native capture uses Capacitor `Camera.getPhoto`, then the same stamp + ≤ 500 KB compress. The OS camera UI replaces the in-app torch preview. Location comes from `@capacitor/geolocation` (permission prompt, then a coarse retry). The stamp waits for a fix before it is burned in. On a website served over plain HTTP, the browser will not provide GPS.
+
+### 6.4.1 Inspection PDF
+
+From the detail page, **Export PDF** builds an A4 file in the browser (`jspdf`). It includes the header, notes, defect rows, and the full checklist. There is no category column. Photos are drawn in the item row. A link (and each photo) opens `/inspections/{id}` on the site that exported the file, where the existing click-to-open photo viewer is used. If the viewer is signed out, login returns to that inspection.
 
 ### 6.5 i18n
 

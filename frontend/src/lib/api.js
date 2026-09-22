@@ -55,7 +55,10 @@ api.interceptors.response.use(
       if (await isOnline()) {
         setToken(null);
         setRefreshToken(null);
-        if (!window.location.pathname.startsWith("/login")) window.location.href = "/login";
+        if (!window.location.pathname.startsWith("/login")) {
+          const next = `${window.location.pathname}${window.location.search}`;
+          window.location.href = `/login?next=${encodeURIComponent(next)}`;
+        }
       }
     }
     return Promise.reject(err);

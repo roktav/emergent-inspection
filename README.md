@@ -1,8 +1,8 @@
-# DT Inspection
+# Asset Inspection
 
 Daily dump-truck chassis inspection for site drivers: walk-around checklists, photo evidence, admin approval, and a site recap report.
 
-**Version 1.9.0** · 22 September 2026, 11:21 WIB
+**Version 1.10.0** · 22 September 2026, 20:39 WIB
 
 Stack: **React 19** (CRA + craco) · **FastAPI** · **MongoDB 7**. Photos are stored on local disk, not a cloud object store.
 
@@ -176,7 +176,13 @@ python3 docs/panduan-pengguna/build_intro_pptx.py
 
 ## Changelog
 
-Versions and timestamps follow git history. **1.9.0** is the latest (22 Sep 2026, 11:21 WIB).
+Versions and timestamps follow git history. **1.10.0** is the latest (22 Sep 2026, 20:39 WIB).
+
+### 1.10.0 — 22 Sep 2026, 20:39 WIB
+
+- Product name is **Asset Inspection** (Indonesian: **Inspeksi Aset**)
+- Inspection detail exports an A4 PDF: checklist without a category column, photos on the item row, and a link back to that inspection
+- Android photo stamps use the device location API and wait for a GPS fix before the stamp is burned in
 
 ### 1.9.0 — 22 Sep 2026, 11:21 WIB
 
