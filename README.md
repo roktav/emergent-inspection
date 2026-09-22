@@ -2,7 +2,7 @@
 
 Daily dump-truck chassis inspection for site drivers: walk-around checklists, photo evidence, admin approval, and a site recap report.
 
-**Version 1.8.0** · 16 September 2026, 12:17 WIB
+**Version 1.9.0** · 22 September 2026, 11:21 WIB
 
 Stack: **React 19** (CRA + craco) · **FastAPI** · **MongoDB 7**. Photos are stored on local disk, not a cloud object store.
 
@@ -27,8 +27,9 @@ JWT_SECRET=change-me-to-a-long-random-value
 SUPERADMIN_EMAIL=you@example.com
 SUPERADMIN_PASSWORD=choose-a-strong-password
 
-# Browser origin(s) allowed to call the API (comma-separated)
-CORS_ORIGINS=http://localhost:3000,http://localhost:8802
+# Browser origin(s) allowed to call the API (comma-separated).
+# The Android WebView origin is https://localhost — include it for the APK.
+CORS_ORIGINS=http://localhost:3000,http://localhost:8802,https://localhost
 
 # Photo purge cron (optional locally). Generate with: openssl rand -hex 24
 WEBHOOK_CRON_SECRET=change-me-too
@@ -106,6 +107,22 @@ yarn start
 
 App: http://localhost:3000
 
+## Android APK (drivers / mechanics)
+
+The APK wraps the same React app with Capacitor. Admins keep using the website. **First login and first Sync must be online.** After that, inspectors can complete a walk-around and take photos without signal; photos stay on the device until Sync uploads them.
+
+1. Point `REACT_APP_BACKEND_URL` at a host the phone can reach (not `localhost`). Include `https://localhost` in `CORS_ORIGINS`.
+2. From `frontend/`:
+
+```bash
+yarn cap:sync
+yarn cap:open
+```
+
+3. In Android Studio, run on a device or **Build → Build APK**. Debug override: temporarily set `server.url` in `frontend/capacitor.config.ts` to your LAN CRA URL (`http://192.168.x.x:3000`) with `cleartext: true`, then `npx cap sync android`.
+
+Non-field roles that sign in on the APK skip the outbox and behave like the website.
+
 ## Seeded accounts
 
 On first start the backend creates a superadmin from `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`, plus demo users for the seeded IMIP site:
@@ -135,16 +152,37 @@ Rebuild spec: [docs/TECHNICAL_DESIGN.md](docs/TECHNICAL_DESIGN.md).
 
 ```
 backend/     FastAPI app (server.py), auth, seed, additive migrations, local storage
-frontend/    React SPA
-docs/        Technical design (rebuild)
+frontend/    React SPA and Capacitor Android project (`frontend/android/`)
+docs/        Technical design, Indonesian user manual, and kickoff deck
 docker-compose.yml
 ```
 
 Schema changes go in `backend/migrations.py` as numbered additive steps. Do not wipe Mongo collections to “migrate”.
 
+## Documentation
+
+- Rebuild spec: [docs/TECHNICAL_DESIGN.md](docs/TECHNICAL_DESIGN.md)
+- Indonesian user manual (ITI visual identity): [docs/Panduan_Pengguna_Inspeksi_DT.pdf](docs/Panduan_Pengguna_Inspeksi_DT.pdf). Source Markdown, screenshots, and the print stylesheet live under [docs/panduan-pengguna/](docs/panduan-pengguna/). Rebuild with:
+
+```bash
+python3 docs/panduan-pengguna/build_manual.py
+```
+
+- Indonesian kickoff deck (same visual identity, 16:9): [docs/Inspeksi_DT_Pengenalan.pptx](docs/Inspeksi_DT_Pengenalan.pptx). Rebuild with:
+
+```bash
+python3 docs/panduan-pengguna/build_intro_pptx.py
+```
+
 ## Changelog
 
-Versions and timestamps follow git history. **1.8.0** is the latest release (16 Sep 2026, 12:17 WIB).
+Versions and timestamps follow git history. **1.9.0** is the latest (22 Sep 2026, 11:21 WIB).
+
+### 1.9.0 — 22 Sep 2026, 11:21 WIB
+
+- Capacitor Android shell (`id.co.iti.inspeksidt`) wrapping the existing SPA
+- 30-day refresh tokens and `GET /sync/field` snapshot; field outbox + IndexedDB photos for offline inspections
+- First login/sync online; photos stay on device until Sync; Inspeksi Saya shows Queued
 
 ### 1.8.0 — 16 Sep 2026, 12:17 WIB
 
