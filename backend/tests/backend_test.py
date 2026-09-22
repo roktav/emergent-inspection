@@ -34,7 +34,19 @@ def _auth(token):
 
 def _type_id(token):
     types = requests.get(f"{API}/inspection-types", headers=_auth(token)).json()
-    return next(t["id"] for t in types if t["is_active"])
+    active = [t for t in types if t["is_active"]]
+    empty = [t for t in active if not (t.get("excluded_item_ids") or [])]
+    return (empty or active)[0]["id"]
+
+
+def _checklist(token, truck_id, type_id=None):
+    tid = type_id or _type_id(token)
+    return requests.get(
+        f"{API}/inspections/checklist",
+        params={"truck_id": truck_id, "inspection_type_id": tid},
+        headers=_auth(token),
+        timeout=30,
+    )
 
 
 def _tiny_png_bytes():
@@ -320,8 +332,7 @@ class TestRoleRBAC:
     def test_mechanic_can_create_inspection(self, mechanic_ctx, admin_ctx):
         trucks = requests.get(f"{API}/trucks", headers=_auth(admin_ctx["token"])).json()
         truck = next(t for t in trucks if t["hull_number"] == "DT-003")
-        cl = requests.get(f"{API}/inspections/checklist?truck_id={truck['id']}",
-                          headers=_auth(mechanic_ctx["token"])).json()
+        cl = _checklist(mechanic_ctx["token"], truck["id"]).json()
         items = [i for g in cl["groups"] for i in g["items"]]
         results = [{"item_id": it["id"], "item_name": it["name"], "status": "OK", "note": None, "photos": []}
                    for it in items]
@@ -342,8 +353,7 @@ class TestChecklist:
     def test_ev_37_items(self, admin_ctx):
         trucks = self._trucks(admin_ctx)
         ev = next(t for t in trucks if t["hull_number"] == "DT-001")
-        r = requests.get(f"{API}/inspections/checklist?truck_id={ev['id']}",
-                         headers=_auth(admin_ctx["token"]))
+        r = _checklist(admin_ctx["token"], ev["id"])
         assert r.status_code == 200
         d = r.json()
         assert len(d["groups"]) == 2
@@ -357,11 +367,22 @@ class TestChecklist:
     def test_ice_29_items(self, admin_ctx):
         trucks = self._trucks(admin_ctx)
         ice = next(t for t in trucks if t["hull_number"] == "DT-002")
-        r = requests.get(f"{API}/inspections/checklist?truck_id={ice['id']}",
-                         headers=_auth(admin_ctx["token"]))
+        r = _checklist(admin_ctx["token"], ice["id"])
+        assert r.status_code == 200
         d = r.json()
         assert len(d["groups"]) == 1
         assert len(d["groups"][0]["items"]) == 29
+
+    def test_requires_inspection_type_id(self, admin_ctx):
+        trucks = self._trucks(admin_ctx)
+        ev = next(t for t in trucks if t["hull_number"] == "DT-001")
+        r = requests.get(
+            f"{API}/inspections/checklist",
+            params={"truck_id": ev["id"]},
+            headers=_auth(admin_ctx["token"]),
+            timeout=30,
+        )
+        assert r.status_code == 422
 
 
 # ---------- Inspection create ----------
@@ -371,8 +392,7 @@ class TestInspection:
     def test_create_stores_hull_and_vin(self, driver_ctx, admin_ctx):
         trucks = requests.get(f"{API}/trucks", headers=_auth(admin_ctx["token"])).json()
         truck = next(t for t in trucks if t["hull_number"] == "DT-002")
-        r = requests.get(f"{API}/inspections/checklist?truck_id={truck['id']}",
-                         headers=_auth(driver_ctx["token"]))
+        r = _checklist(driver_ctx["token"], truck["id"])
         items = [i for g in r.json()["groups"] for i in g["items"]]
         results = [{"item_id": it["id"], "item_name": it["name"], "status": "OK", "note": None, "photos": []}
                    for it in items]
@@ -662,8 +682,7 @@ class TestPurgeEndToEnd:
         # 2. Create inspection on DT-004 with photo on first item
         trucks = requests.get(f"{API}/trucks", headers=_auth(admin_ctx["token"])).json()
         truck = next(t for t in trucks if t["hull_number"] == "DT-004")
-        r = requests.get(f"{API}/inspections/checklist?truck_id={truck['id']}",
-                         headers=_auth(driver_ctx["token"]))
+        r = _checklist(driver_ctx["token"], truck["id"])
         items = [i for g in r.json()["groups"] for i in g["items"]]
         results = [{"item_id": it["id"], "item_name": it["name"], "status": "OK", "note": None, "photos": []}
                    for it in items]
@@ -726,8 +745,7 @@ class TestPurgeEndToEnd:
         photo_path = r.json()["path"]
         trucks = requests.get(f"{API}/trucks", headers=_auth(admin_ctx["token"])).json()
         truck = next(t for t in trucks if t["hull_number"] == "DT-005")
-        r = requests.get(f"{API}/inspections/checklist?truck_id={truck['id']}",
-                         headers=_auth(driver_ctx["token"]))
+        r = _checklist(driver_ctx["token"], truck["id"])
         items = [i for g in r.json()["groups"] for i in g["items"]]
         results = [{"item_id": it["id"], "item_name": it["name"], "status": "OK", "note": None, "photos": []}
                    for it in items]
@@ -822,8 +840,7 @@ class TestInspectionTypeValidation:
     def _base_payload(self, driver_ctx, admin_ctx, hull="DT-003"):
         trucks = requests.get(f"{API}/trucks", headers=_auth(admin_ctx["token"])).json()
         truck = next(t for t in trucks if t["hull_number"] == hull)
-        cl = requests.get(f"{API}/inspections/checklist?truck_id={truck['id']}",
-                          headers=_auth(driver_ctx["token"])).json()
+        cl = _checklist(driver_ctx["token"], truck["id"]).json()
         items = [i for g in cl["groups"] for i in g["items"]]
         results = [{"item_id": it["id"], "item_name": it["name"], "status": "OK", "note": None, "photos": []}
                    for it in items]
@@ -877,3 +894,117 @@ class TestInspectionTypeValidation:
         det = requests.get(f"{API}/inspections/{iid}", headers=_auth(driver_ctx["token"])).json()
         assert det["inspection_type_id"] == tid
         assert det["inspection_type_name"] == d["inspection_type_name"]
+
+
+# ---------- Inspection type as item reducer ----------
+class TestTypeExcludes:
+    def test_exclude_list_reduces_unit_pool(self, company_admin_ctx, admin_ctx, driver_ctx):
+        ca = company_admin_ctx["token"]
+        sa = admin_ctx["token"]
+        created = {"items": [], "cats": [], "vcs": [], "trucks": [], "types": []}
+
+        def _post(path, payload, token=ca):
+            r = requests.post(f"{API}{path}", json=payload, headers=_auth(token), timeout=30)
+            assert r.status_code == 200, r.text
+            return r.json()
+
+        try:
+            suffix = datetime.now(timezone.utc).strftime("%H%M%S%f")
+            letters = [chr(ord("A") + i) for i in range(20)]
+            items = [_post("/items", {"name": f"EXCL-{ch}-{suffix}", "guidance": ch, "status_options": ["OK", "NOT_OK"]})
+                     for ch in letters]
+            created["items"] = [i["id"] for i in items]
+            cat_a_ids = [i["id"] for i in items[:10]]
+            cat_b_ids = [i["id"] for i in items[10:]]
+            cat_a = _post("/categories", {"name": f"EXCL-Cat-A-{suffix}"})
+            cat_b = _post("/categories", {"name": f"EXCL-Cat-B-{suffix}"})
+            created["cats"] = [cat_a["id"], cat_b["id"]]
+            r = requests.put(f"{API}/categories/{cat_a['id']}/items", json={"ids": cat_a_ids},
+                             headers=_auth(ca), timeout=30)
+            assert r.status_code == 200, r.text
+            r = requests.put(f"{API}/categories/{cat_b['id']}/items", json={"ids": cat_b_ids},
+                             headers=_auth(ca), timeout=30)
+            assert r.status_code == 200, r.text
+
+            vc_ab = _post("/vehicle-categories", {"name": f"EXCL-VC-AB-{suffix}"})
+            vc_a = _post("/vehicle-categories", {"name": f"EXCL-VC-A-{suffix}"})
+            created["vcs"] = [vc_ab["id"], vc_a["id"]]
+            r = requests.put(f"{API}/vehicle-categories/{vc_ab['id']}/inspection-categories",
+                             json={"ids": [cat_a["id"], cat_b["id"]]}, headers=_auth(ca), timeout=30)
+            assert r.status_code == 200, r.text
+            r = requests.put(f"{API}/vehicle-categories/{vc_a['id']}/inspection-categories",
+                             json={"ids": [cat_a["id"]]}, headers=_auth(ca), timeout=30)
+            assert r.status_code == 200, r.text
+
+            truck_x = _post("/trucks", {
+                "unit_vin_number": f"EXCLVIN{suffix}1", "hull_number": f"EXCL-X-{suffix}",
+                "vehicle_category_id": vc_ab["id"],
+            }, token=sa)
+            truck_y = _post("/trucks", {
+                "unit_vin_number": f"EXCLVIN{suffix}2", "hull_number": f"EXCL-Y-{suffix}",
+                "vehicle_category_id": vc_a["id"],
+            }, token=sa)
+            created["trucks"] = [truck_x["id"], truck_y["id"]]
+
+            itype = _post("/inspection-types", {"name": f"ZZ-Type-Z-{suffix}", "code": f"Z{suffix[-4:]}"})
+            created["types"] = [itype["id"]]
+            assert itype.get("excluded_item_ids") in ([], None)
+
+            exclude_ids = [items[0]["id"], items[10]["id"]]  # A and K
+            r = requests.put(f"{API}/inspection-types/{itype['id']}/excluded-items",
+                             json={"ids": exclude_ids}, headers=_auth(driver_ctx["token"]), timeout=30)
+            assert r.status_code == 403
+            r = requests.put(f"{API}/inspection-types/{itype['id']}/excluded-items",
+                             json={"ids": exclude_ids}, headers=_auth(ca), timeout=30)
+            assert r.status_code == 200, r.text
+            assert set(r.json().get("excluded_item_ids") or []) == set(exclude_ids)
+
+            cl_x = _checklist(sa, truck_x["id"], itype["id"])
+            assert cl_x.status_code == 200, cl_x.text
+            x_items = [i for g in cl_x.json()["groups"] for i in g["items"]]
+            x_ids = {i["id"] for i in x_items}
+            assert len(x_items) == 18
+            assert items[0]["id"] not in x_ids
+            assert items[10]["id"] not in x_ids
+            assert {g["category"]["name"] for g in cl_x.json()["groups"]} == {f"EXCL-Cat-A-{suffix}", f"EXCL-Cat-B-{suffix}"}
+
+            cl_y = _checklist(sa, truck_y["id"], itype["id"])
+            assert cl_y.status_code == 200, cl_y.text
+            y_items = [i for g in cl_y.json()["groups"] for i in g["items"]]
+            y_ids = {i["id"] for i in y_items}
+            assert len(y_items) == 9
+            assert items[0]["id"] not in y_ids
+            assert items[10]["id"] not in y_ids
+            assert all(g["category"]["name"] == f"EXCL-Cat-A-{suffix}" for g in cl_y.json()["groups"])
+
+            ev = next(t for t in requests.get(f"{API}/trucks", headers=_auth(sa)).json()
+                      if t["hull_number"] == "DT-001")
+            cl_empty = _checklist(sa, ev["id"])
+            assert cl_empty.status_code == 200
+            assert sum(len(g["items"]) for g in cl_empty.json()["groups"]) == 37
+
+            payload = {
+                "truck_id": truck_x["id"], "km_hm": 1.0,
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "inspection_date": datetime.now(timezone.utc).date().isoformat(),
+                "inspection_type_id": itype["id"],
+                "results": [{
+                    "item_id": items[0]["id"], "item_name": items[0]["name"],
+                    "status": "OK", "note": None, "photos": [],
+                }],
+            }
+            r = requests.post(f"{API}/inspections", json=payload, headers=_auth(driver_ctx["token"]), timeout=30)
+            assert r.status_code == 400
+            assert "excluded" in r.text.lower()
+        finally:
+            for tid in created["trucks"]:
+                requests.delete(f"{API}/trucks/{tid}", headers=_auth(sa), timeout=30)
+            for tid in created["types"]:
+                requests.delete(f"{API}/inspection-types/{tid}", headers=_auth(ca), timeout=30)
+            for vid in created["vcs"]:
+                requests.delete(f"{API}/vehicle-categories/{vid}", headers=_auth(ca), timeout=30)
+            for cid in created["cats"]:
+                requests.put(f"{API}/categories/{cid}/items", json={"ids": []}, headers=_auth(ca), timeout=30)
+                requests.delete(f"{API}/categories/{cid}", headers=_auth(ca), timeout=30)
+            for iid in created["items"]:
+                requests.delete(f"{API}/items/{iid}", headers=_auth(ca), timeout=30)

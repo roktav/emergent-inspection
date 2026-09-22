@@ -53,7 +53,7 @@ export default function DashboardPage() {
       <section className="rounded-2xl border bg-white shadow-sm">
         <div className="flex items-center justify-between border-b px-5 py-4">
           <h2 className="font-heading text-base font-semibold md:text-lg">{t("recent_inspections")}</h2>
-          <Link to="/inspections" className="flex items-center gap-1 text-sm font-medium text-brand-deep hover:underline" data-testid="dashboard-view-all-link">
+          <Link to={["driver", "mechanic"].includes(user?.role) ? "/my-inspections" : "/inspections"} className="flex items-center gap-1 text-sm font-medium text-brand-deep hover:underline" data-testid="dashboard-view-all-link">
             {t("view_all")} <ArrowRight className="h-4 w-4" />
           </Link>
         </div>

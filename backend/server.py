@@ -138,6 +138,7 @@ class InspectionType(BaseDocument):
     name: str
     code: Optional[str] = None
     description: Optional[str] = None
+    excluded_item_ids: List[str] = []
     is_active: bool = True
 
 
@@ -495,6 +496,7 @@ def register_company_master(path: str, coll: str, Model, sort_key: str, *, read_
         data = await enforce_company_scope(user, body.to_mongo())
         data.pop("item_ids", None)
         data.pop("category_ids", None)
+        data.pop("excluded_item_ids", None)
         res = await db[coll].insert_one(data)
         return Model.from_mongo(await db[coll].find_one({"_id": res.inserted_id})).out()
 
@@ -504,6 +506,7 @@ def register_company_master(path: str, coll: str, Model, sort_key: str, *, read_
         data = await enforce_company_scope(user, body.to_mongo())
         data.pop("item_ids", None)
         data.pop("category_ids", None)
+        data.pop("excluded_item_ids", None)
         await db[coll].update_one({"_id": oid(id_)}, {"$set": data})
         return Model.from_mongo(await db[coll].find_one({"_id": oid(id_)})).out()
 
@@ -514,6 +517,7 @@ def register_company_master(path: str, coll: str, Model, sort_key: str, *, read_
             raise HTTPException(status_code=400, detail="Category still has assigned items")
         if coll == "inspection_items":
             await db.inspection_categories.update_many({"item_ids": id_}, {"$pull": {"item_ids": id_}})
+            await db.inspection_types.update_many({"excluded_item_ids": id_}, {"$pull": {"excluded_item_ids": id_}})
         if coll == "inspection_categories":
             await db.vehicle_categories.update_many({"category_ids": id_}, {"$pull": {"category_ids": id_}})
         if coll == "vehicle_categories":
@@ -579,6 +583,18 @@ async def assign_items(id_: str, body: IdList, user: dict = Depends(require_role
     return InspectionCategory.from_mongo(await db.inspection_categories.find_one({"_id": oid(id_)})).out()
 
 
+@api_router.put("/inspection-types/{id_}/excluded-items")
+async def assign_excluded_items(id_: str, body: IdList, user: dict = Depends(require_roles(*COMPANY_ADMIN_ROLES))):
+    itype = await find_or_404("inspection_types", id_, company_scope(user))
+    ids = list(dict.fromkeys(body.ids))
+    valid = await db.inspection_items.find(
+        {"_id": {"$in": [oid(i) for i in ids]}, "company_id": itype["company_id"]}).to_list(2000)
+    valid_ids = {str(v["_id"]) for v in valid}
+    ids = [i for i in ids if i in valid_ids]
+    await db.inspection_types.update_one({"_id": oid(id_)}, {"$set": {"excluded_item_ids": ids}})
+    return InspectionType.from_mongo(await db.inspection_types.find_one({"_id": oid(id_)})).out()
+
+
 @api_router.put("/vehicle-categories/{id_}/inspection-categories")
 async def assign_vehicle_inspection_categories(id_: str, body: IdList, user: dict = Depends(require_roles(*COMPANY_ADMIN_ROLES))):
     vc = await find_or_404("vehicle_categories", id_, company_scope(user))
@@ -593,9 +609,13 @@ async def assign_vehicle_inspection_categories(id_: str, body: IdList, user: dic
 
 # ---------- Inspections ----------
 @api_router.get("/inspections/checklist")
-async def checklist(truck_id: str, user: dict = Depends(require_roles(*ALL_ROLES))):
+async def checklist(truck_id: str, inspection_type_id: str, user: dict = Depends(require_roles(*ALL_ROLES))):
     truck = await find_or_404("dump_trucks", truck_id, site_scope(user))
-    vc = None
+    itype = await db.inspection_types.find_one({
+        "_id": oid(inspection_type_id), "company_id": truck["company_id"], "is_active": True})
+    if not itype:
+        raise HTTPException(status_code=400, detail="Invalid inspection type")
+    excluded = set(itype.get("excluded_item_ids") or [])
     cat_ids = []
     if truck.get("vehicle_category_id"):
         vc = await db.vehicle_categories.find_one({"_id": oid(truck["vehicle_category_id"])})
@@ -610,7 +630,8 @@ async def checklist(truck_id: str, user: dict = Depends(require_roles(*ALL_ROLES
         c = cats.get(cid)
         if not c:
             continue
-        its = [InspectionItem.from_mongo(items[i]).out() for i in c.get("item_ids", []) if i in items]
+        its = [InspectionItem.from_mongo(items[i]).out()
+               for i in c.get("item_ids", []) if i in items and i not in excluded]
         if its:
             groups.append({"category": InspectionCategory.from_mongo(c).out(), "items": its})
     return {"truck": await _enrich_truck(truck), "groups": groups}
@@ -623,6 +644,9 @@ async def create_inspection(body: InspectionCreate, user: dict = Depends(require
         "_id": oid(body.inspection_type_id), "company_id": truck["company_id"], "is_active": True})
     if not itype:
         raise HTTPException(status_code=400, detail="Invalid inspection type")
+    excluded = set(itype.get("excluded_item_ids") or [])
+    if any(r.item_id in excluded for r in body.results):
+        raise HTTPException(status_code=400, detail="Result includes an item excluded by this inspection type")
     if not body.results:
         raise HTTPException(status_code=400, detail="No inspection results")
     completed = datetime.now(timezone.utc)

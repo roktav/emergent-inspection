@@ -31,8 +31,15 @@ export default function InspectionsPage() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
+  const companyId = useMemo(
+    () => sites.find((s) => s.id === siteId)?.company_id || (!needsSitePicker ? user?.company_id : undefined),
+    [sites, siteId, needsSitePicker, user?.company_id],
+  );
   const trucks = useLookup(`/trucks${needsSitePicker && siteId ? `?site_id=${siteId}` : ""}`, !needsSitePicker || !!siteId);
-  const types = useLookup(`/inspection-types`, true);
+  const types = useLookup(
+    `/inspection-types${companyId ? `?company_id=${companyId}` : ""}`,
+    !!companyId,
+  );
   const people = useLookup(`/users${needsSitePicker && siteId ? `?site_id=${siteId}` : ""}`, isAdmin && (!needsSitePicker || !!siteId));
   const drivers = useMemo(
     () => people.filter((p) => p.role === "driver" || p.role === "mechanic"),
