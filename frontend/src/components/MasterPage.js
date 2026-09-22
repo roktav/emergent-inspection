@@ -11,6 +11,7 @@ import { Switch } from "./ui/switch";
 import { Checkbox } from "./ui/checkbox";
 import { Badge } from "./ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { formatRange, ListPager, useClientPager } from "./ListPager";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 import {
@@ -116,6 +117,10 @@ export function MasterPage({ titleKey, endpoint, columns, fields, canWrite = tru
     return rows.filter((r) => JSON.stringify(r).toLowerCase().includes(s));
   }, [rows, q]);
 
+  const { page, setPage, slice: paged, total: filteredTotal, pageSize } = useClientPager(filtered, {
+    resetKey: `${q}|${queryKey}`,
+  });
+
   const openNew = () => {
     const f = { ...defaults };
     fields.forEach((fl) => {
@@ -179,7 +184,7 @@ export function MasterPage({ titleKey, endpoint, columns, fields, canWrite = tru
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="font-heading text-2xl font-semibold tracking-tight lg:text-3xl">{t(titleKey)}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{rows.length} {t("items")}{hint ? ` · ${hint}` : ""}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{formatRange(t, page, pageSize, filteredTotal)}{hint ? ` · ${hint}` : ""}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {headerExtra}
@@ -209,10 +214,10 @@ export function MasterPage({ titleKey, endpoint, columns, fields, canWrite = tru
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={columns.length + 1} className="py-10 text-center text-muted-foreground">{t("loading")}</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
+              ) : filteredTotal === 0 ? (
                 <TableRow><TableCell colSpan={columns.length + 1} className="py-10 text-center text-muted-foreground" data-testid={`${testPrefix}-empty`}>{t("no_data")}</TableCell></TableRow>
               ) : (
-                filtered.map((row) => (
+                paged.map((row) => (
                   <TableRow key={row.id} data-testid={`${testPrefix}-row-${row.id}`} className="hover:bg-brand-bg/60">
                     {columns.map((c) => (
                       <TableCell key={c.key} className="text-sm">
@@ -236,6 +241,7 @@ export function MasterPage({ titleKey, endpoint, columns, fields, canWrite = tru
             </TableBody>
           </Table>
         </div>
+        <ListPager page={page} pageSize={pageSize} total={filteredTotal} onPageChange={setPage} testId={`${testPrefix}-pager`} />
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

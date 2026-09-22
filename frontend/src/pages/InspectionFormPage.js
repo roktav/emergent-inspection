@@ -2,10 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useBlocker, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Camera, X, Gauge, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 import { useAuth } from "../context/AuthContext";
 import { useT } from "../lib/i18n";
 import { api, errMsg } from "../lib/api";
 import { answersDirty, deleteDraft, formHasData, getDraft, listDrafts, upsertDraft } from "../lib/inspectionDrafts";
+import { useOffline } from "../lib/offline/OfflineContext";
+import { isFieldRole, isOnline } from "../lib/offline/network";
+import { collectLocalIds, deletePhotoBlob, isLocalPhoto, savePhotoBlob } from "../lib/offline/photos";
+import { enqueueInspection, rewritePhotos, uploadLocalPhoto } from "../lib/offline/outbox";
+import { activeTrucks, activeTypes, checklistFromSnapshot, getSnapshot } from "../lib/offline/snapshot";
 import { AuthImage } from "../components/AuthImage";
 import { StatusPill } from "../components/StatusPill";
 import { CameraCapture } from "../components/CameraCapture";
@@ -31,10 +37,17 @@ function PhotoUploader({ photos, onChange, testId }) {
   const upload = async (blob) => {
     setBusy(true);
     try {
-      const fd = new FormData();
-      fd.append("file", blob, "photo.jpg");
-      const { data } = await api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      onChange([...photos, data.path]);
+      const online = await isOnline();
+      const native = Capacitor.isNativePlatform();
+      if (!native && online) {
+        const fd = new FormData();
+        fd.append("file", blob, "photo.jpg");
+        const { data } = await api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        onChange([...photos, data.path]);
+      } else {
+        const ref = await savePhotoBlob(blob);
+        onChange([...photos, ref]);
+      }
     } catch (err) {
       toast.error(errMsg(err));
       throw err;
@@ -44,14 +57,20 @@ function PhotoUploader({ photos, onChange, testId }) {
   };
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {photos.map((p) => (
-        <div key={p} className="relative h-16 w-16 overflow-hidden rounded-lg border">
+      {photos.map((p) => {
+        const key = isLocalPhoto(p) ? p.localId : p;
+        return (
+        <div key={key} className="relative h-16 w-16 overflow-hidden rounded-lg border">
           <AuthImage path={p} alt="finding" className="h-full w-full object-cover" />
-          <button type="button" onClick={() => onChange(photos.filter((x) => x !== p))} className="absolute right-0.5 top-0.5 rounded-full bg-white/90 p-0.5" data-testid={`${testId}-remove`}>
+          <button type="button" onClick={() => {
+            if (isLocalPhoto(p)) deletePhotoBlob(p.localId);
+            onChange(photos.filter((x) => x !== p));
+          }} className="absolute right-0.5 top-0.5 rounded-full bg-white/90 p-0.5" data-testid={`${testId}-remove`}>
             <X className="h-3 w-3" />
           </button>
         </div>
-      ))}
+        );
+      })}
       <button type="button" onClick={() => setOpen(true)} disabled={busy} data-testid={`${testId}-add`}
         className="flex h-16 min-w-[64px] items-center justify-center gap-1 rounded-lg border-2 border-dashed border-brand px-2 text-xs font-medium text-brand-deep transition-colors hover:bg-brand-bg">
         <Camera className="h-4 w-4" /> {busy ? t("uploading") : t("take_photo")}
@@ -95,6 +114,7 @@ const newDraftId = () => (typeof crypto !== "undefined" && crypto.randomUUID ? c
 export default function InspectionFormPage() {
   const { t } = useT();
   const { user } = useAuth();
+  const { reloadLocal } = useOffline();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { sites, siteId, setSiteId, needsSitePicker } = useSiteScope();
@@ -182,18 +202,43 @@ export default function InspectionFormPage() {
   useEffect(() => {
     if (needsSitePicker && !siteId) return;
     if (!companyId) return;
-    api.get("/trucks", { params: needsSitePicker ? { site_id: siteId } : {} }).then((r) => setTrucks(r.data.filter((x) => x.is_active)));
-    api.get("/inspection-types", { params: { company_id: companyId } }).then((r) => {
-      const active = r.data.filter((x) => x.is_active);
-      setTypes(active);
-      setTypeId((current) => (current && !active.some((ty) => ty.id === current) ? "" : current));
-    });
-    if (!hydratingRef.current) {
-      setTruckId("");
-      setTypeId("");
-      setChecklist(null);
-    }
-  }, [needsSitePicker, siteId, companyId]);
+    let cancelled = false;
+    (async () => {
+      const applyLists = (truckList, typeList) => {
+        if (cancelled) return;
+        setTrucks(truckList);
+        setTypes(typeList);
+        setTypeId((current) => (current && !typeList.some((ty) => ty.id === current) ? "" : current));
+      };
+      const fromSnap = async () => {
+        const snap = await getSnapshot();
+        if (!snap) return false;
+        const truckList = activeTrucks(snap).filter((tr) => !needsSitePicker || tr.site_id === siteId);
+        applyLists(truckList, activeTypes(snap));
+        return true;
+      };
+      try {
+        if (await isOnline()) {
+          const [tr, ty] = await Promise.all([
+            api.get("/trucks", { params: needsSitePicker ? { site_id: siteId } : {} }),
+            api.get("/inspection-types", { params: { company_id: companyId } }),
+          ]);
+          applyLists(tr.data.filter((x) => x.is_active), ty.data.filter((x) => x.is_active));
+        } else if (!(await fromSnap())) {
+          toast.error(t("sync_need_online"));
+          applyLists([], []);
+        }
+      } catch (e) {
+        if (!(await fromSnap())) toast.error(errMsg(e));
+      }
+      if (!hydratingRef.current) {
+        setTruckId("");
+        setTypeId("");
+        setChecklist(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [needsSitePicker, siteId, companyId, t]);
 
   useEffect(() => {
     if (!truckId || !typeId) {
@@ -201,13 +246,15 @@ export default function InspectionFormPage() {
         setChecklist(null);
         setResults({});
       }
-      return;
+      return undefined;
     }
     if (!hydratingRef.current) setResults({});
-    api.get("/inspections/checklist", { params: { truck_id: truckId, inspection_type_id: typeId } }).then((r) => {
-      setChecklist(r.data);
+    let cancelled = false;
+    const applyChecklist = (data) => {
+      if (cancelled || !data) return false;
+      setChecklist(data);
       const defaults = {};
-      r.data.groups.forEach((g) => g.items.forEach((i) => (defaults[i.id] = { status: "OK", photos: [] })));
+      data.groups.forEach((g) => g.items.forEach((i) => (defaults[i.id] = { status: "OK", photos: [] })));
       const saved = pendingResultsRef.current || {};
       pendingResultsRef.current = null;
       const merged = { ...defaults };
@@ -216,11 +263,30 @@ export default function InspectionFormPage() {
       });
       setResults(merged);
       hydratingRef.current = false;
-    }).catch((e) => {
-      hydratingRef.current = false;
-      toast.error(errMsg(e));
-    });
-  }, [truckId, typeId]);
+      return true;
+    };
+    (async () => {
+      const cached = async () => checklistFromSnapshot(await getSnapshot(), truckId, typeId);
+      try {
+        if (!(await isOnline())) {
+          if (!applyChecklist(await cached())) {
+            hydratingRef.current = false;
+            setChecklist(null);
+            toast.error(t("sync_need_online"));
+          }
+          return;
+        }
+        const { data } = await api.get("/inspections/checklist", { params: { truck_id: truckId, inspection_type_id: typeId } });
+        applyChecklist(data);
+      } catch (e) {
+        if (!applyChecklist(await cached())) {
+          hydratingRef.current = false;
+          toast.error(errMsg(e));
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [truckId, typeId, t]);
 
   useEffect(() => {
     if (!userId || hydratingRef.current || !hasData) return;
@@ -254,6 +320,7 @@ export default function InspectionFormPage() {
   };
 
   const confirmDiscardAndLeave = () => {
+    collectLocalIds(snapshotRef.current.results).forEach((id) => deletePhotoBlob(id));
     deleteDraft(userId, draftIdRef.current);
     allowLeaveRef.current = true;
     blocker.proceed?.();
@@ -305,15 +372,44 @@ export default function InspectionFormPage() {
     }
     setSubmitting(true);
     try {
-      const { data } = await api.post("/inspections", {
+      const resultRows = items.map((i) => ({
+        item_id: i.id,
+        item_name: i.name,
+        category_name: i.category_name,
+        status: results[i.id].status,
+        note: results[i.id].note || null,
+        photos: results[i.id].photos || [],
+      }));
+      const payload = {
         truck_id: truckId,
         inspection_type_id: typeId,
         km_hm: Number(kmHm),
         started_at: startedAt.toISOString(),
         inspection_date: localDate(),
         general_note: generalNote || null,
-        results: items.map((i) => ({ item_id: i.id, item_name: i.name, category_name: i.category_name, status: results[i.id].status, note: results[i.id].note || null, photos: results[i.id].photos || [] })),
-      });
+        results: resultRows,
+      };
+      const localIds = collectLocalIds(resultRows);
+      const online = await isOnline();
+      if (!online) {
+        if (!isFieldRole(user?.role)) {
+          toast.error(t("sync_offline"));
+          return;
+        }
+        await enqueueInspection({ userId, payload, photoLocalIds: localIds, draftId: draftIdRef.current });
+        deleteDraft(userId, draftIdRef.current);
+        await reloadLocal();
+        allowLeaveRef.current = true;
+        toast.success(t("queued"));
+        navigate("/my-inspections");
+        return;
+      }
+      const pathByLocal = {};
+      for (const localId of localIds) {
+        pathByLocal[localId] = await uploadLocalPhoto(localId);
+      }
+      const { data } = await api.post("/inspections", { ...payload, results: rewritePhotos(resultRows, pathByLocal) });
+      await Promise.all(localIds.map((id) => deletePhotoBlob(id)));
       deleteDraft(userId, draftIdRef.current);
       allowLeaveRef.current = true;
       toast.success(t("inspection_saved"));

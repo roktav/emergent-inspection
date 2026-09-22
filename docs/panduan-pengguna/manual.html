@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <title>Panduan Pengguna — Inspeksi DT</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Roboto:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="print.css" />
+</head>
+<body>
+  <section class="cover">
+    <div class="cover-dots" aria-hidden="true">
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+    <div class="logo-plate">
+      <img src="images/brand/logo.png" alt="Inline Technology International" />
+    </div>
+    <p class="cover-kicker">Dokumentasi produk</p>
+    <h1 class="cover-title">Panduan Pengguna</h1>
+    <p class="cover-product">Inspeksi DT</p>
+    <hr class="cover-rule" />
+    <p class="cover-meta">
+      Inline Technology International<br />
+      Inspeksi harian chassis dump truck<br />
+      16 September 2026
+    </p>
+  </section>
+
+  <header class="sheet-head">
+    <img src="images/brand/logo.png" alt="Inline Technology International" />
+    <p class="kicker">Panduan Pengguna · Inspeksi DT</p>
+  </header>
+
+  <nav class="toc">
+    <h1>Daftar isi</h1>
+    <ol>
+      <li><span class="num"></span><a href="#cara-pakai">Cara memakai dokumen ini</a></li>
+      <li><span class="num">01</span><a href="#bab-1">Tentang aplikasi</a></li>
+      <li><span class="num">02</span><a href="#bab-2">Peran dan menu</a></li>
+      <li><span class="num">03</span><a href="#bab-3">Masuk dan keluar</a></li>
+      <li><span class="num">04</span><a href="#bab-4">SOP Driver dan Mekanik</a></li>
+      <li><span class="num">05</span><a href="#bab-5">SOP Admin Site</a></li>
+      <li><span class="num">06</span><a href="#bab-6">SOP Admin Perusahaan</a></li>
+      <li><span class="num">07</span><a href="#bab-7">SOP Superadmin</a></li>
+      <li><span class="num">08</span><a href="#bab-8">Laporan, status, dan ekspor</a></li>
+      <li><span class="num">09</span><a href="#bab-9">Foto</a></li>
+      <li><span class="num">10</span><a href="#bab-10">Hierarki data</a></li>
+      <li><span class="num">11</span><a href="#bab-11">Pertanyaan umum</a></li>
+      <li><span class="num"></span><a href="#lampiran-a-glosarium-status-item">Lampiran A — Glosarium status item</a></li>
+      <li><span class="num"></span><a href="#lampiran-b-akun-demo-lingkungan-lokal-saja">Lampiran B — Akun demo (lingkungan lokal saja)</a></li>
+    </ol>
+  </nav>
+
+  <main class="content">
+    <h2 id="cara-pakai">Cara memakai dokumen ini</h2><div class="callout">
+<ol><li>Buka aplikasi <strong>Inspeksi DT</strong>.</li><li>Di pojok kanan atas, pilih <strong>ID</strong> (bukan EN) agar label di layar sama dengan panduan ini.</li><li>Nama tombol, menu, dan kolom di dokumen ini dikutip <strong>persis</strong> dari antarmuka.</li></ol>
+<p>Jika bahasa layar masih Inggris, klik <strong>ID</strong> pada sakelar <strong>EN / ID</strong>. Pilihan bahasa tersimpan di peramban.</p>
+
+</div><h2 id="bab-1"><span class="chap">01</span>Tentang aplikasi</h2>
+<p><strong>Inspeksi DT</strong> adalah aplikasi inspeksi harian chassis dump truck untuk driver dan mekanik di site. Dengan aplikasi ini Anda dapat:</p>
+<ul><li>mengisi checklist walk-around (keliling unit);</li><li>merekam foto temuan (dengan cap GPS, waktu, dan nama pemeriksa);</li><li>menyimpan <strong>draf di perangkat</strong> lalu mengirim inspeksi;</li><li>meminta persetujuan admin site;</li><li>melihat laporan dan rekap kendaraan per site.</li></ul>
+<p>Setelah <strong>Kirim Inspeksi</strong>, data di server tidak dapat diubah. Tidak ada ekspor PDF per inspeksi atau pemulihan kata sandi mandiri. Draf hanya tersimpan di peramban perangkat itu (bukan di server).</p>
+<hr />
+<h2 id="bab-2"><span class="chap">02</span>Peran dan menu</h2>
+<p>Hak akses mengikuti peran akun. <strong>Mekanik</strong> memiliki hak yang sama dengan <strong>Driver</strong>.</p>
+<table><thead><tr><th>Peran</th><th>Menu yang terlihat</th><th>Tidak dapat</th></tr></thead><tbody><tr><td><strong>Superadmin</strong></td><td>Semua menu, termasuk <strong>Perusahaan</strong></td><td>—</td></tr><tr><td><strong>Admin Perusahaan</strong></td><td>Beranda, Site, Pengguna &amp; Peran, Kategori Kendaraan/Aset, Daftar Kendaraan/Aset, Kategori Inspeksi, Item Inspeksi, Tipe Inspeksi, Inspeksi Baru, Laporan Inspeksi, Rekap Kendaraan Site</td><td>Perusahaan</td></tr><tr><td><strong>Admin Site</strong></td><td>Beranda, Pengguna &amp; Peran, Daftar Kendaraan/Aset, Inspeksi Baru, Laporan Inspeksi, Rekap Kendaraan Site</td><td>Perusahaan, Site, master checklist (kategori/item/tipe inspeksi, kategori kendaraan)</td></tr><tr><td><strong>Driver</strong></td><td>Beranda, Inspeksi Baru, <strong>Inspeksi Saya</strong></td><td>Data Master, Rekap, persetujuan</td></tr><tr><td><strong>Mekanik</strong></td><td>Sama dengan Driver</td><td>Sama dengan Driver</td></tr></tbody></table>
+<p>Kelompok menu di sidebar:</p>
+<ul><li><strong>Beranda</strong></li><li><strong>Data Master</strong> — sesuai peran</li><li><strong>Transaksi</strong> — Inspeksi Baru; <strong>Laporan Inspeksi</strong> (admin) atau <strong>Inspeksi Saya</strong> (driver/mekanik)</li><li><strong>Laporan</strong> — Rekap Kendaraan Site (admin)</li></ul>
+<p>Di bagian bawah sidebar: nama pengguna, lencana peran, nama site (jika ada), dan tombol <strong>Keluar</strong>.</p>
+<hr />
+<h2 id="bab-3"><span class="chap">03</span>Masuk dan keluar</h2>
+<h3>3.1 Masuk</h3>
+<ol><li>Buka halaman <strong>Masuk ke akun Anda</strong>.</li><li>Isi <strong>Email</strong> dan <strong>Kata sandi</strong>.</li><li>Klik <strong>Masuk</strong>.</li></ol>
+<p>Jika gagal, muncul pesan <strong>Gagal masuk</strong>. Setelah <strong>5 percobaan gagal</strong>, akun dikunci <strong>15 menit</strong>. Sesi berlaku <strong>12 jam</strong>. Akun <strong>Nonaktif</strong> tidak dapat masuk.</p>
+<p>Tidak ada tautan lupa kata sandi. Perubahan kata sandi dilakukan admin di <strong>Pengguna &amp; Peran</strong> (field <strong>Kata sandi</strong>; kosongkan untuk mempertahankan kata sandi saat ini). Minimum 6 karakter.</p>
+<figure><img class="shot" src="images/01-login.png" alt="Halaman masuk Inspeksi DT" /><figcaption class="caption">Gambar 1. Halaman masuk. Pilih <strong>ID</strong> di sakelar bahasa sebelum mulai bekerja.</figcaption></figure>
+<h3>3.2 Keluar</h3>
+<p>Klik <strong>Keluar</strong> di sidebar. Anda kembali ke halaman masuk.</p>
+<hr />
+<h2 id="bab-4"><span class="chap">04</span>SOP Driver dan Mekanik</h2>
+<p>Driver dan mekanik hanya melihat inspeksi yang mereka kirim sendiri. Nama pelaksana terisi otomatis (akun yang sedang masuk); tidak ada dropdown pilih orang lain.</p>
+<h3>4.1 Beranda</h3>
+<p>Setelah masuk, halaman <strong>Beranda</strong> menampilkan <strong>Selamat datang</strong> plus nama Anda, tombol <strong>Mulai inspeksi</strong>, dan kartu:</p>
+<ul><li><strong>Kendaraan/Aset Aktif</strong></li><li><strong>Inspeksi Hari Ini</strong></li><li><strong>Temuan Hari Ini</strong></li><li><strong>Menunggu Persetujuan</strong></li></ul>
+<p>Di bawahnya: <strong>Inspeksi Terbaru</strong> dan tautan <strong>Lihat semua</strong>. Jika kosong: <strong>Belum ada data</strong>.</p>
+<figure><img class="shot" src="images/02-beranda.png" alt="Beranda driver" /><figcaption class="caption">Gambar 2. Beranda setelah masuk sebagai Driver.</figcaption></figure>
+<h3>4.2 Mulai inspeksi</h3>
+<p>Buka <strong>Inspeksi Baru</strong> dari menu <strong>Transaksi</strong>, atau klik <strong>Mulai inspeksi</strong> di Beranda.</p>
+<p>Subjudul di layar: <em>Kelilingi unit berlawanan arah jarum jam dan periksa setiap item.</em></p>
+<p>Isi formulir atas:</p>
+<table><thead><tr><th>Kolom</th><th>Keterangan</th></tr></thead><tbody><tr><td><strong>Daftar Kendaraan/Aset</strong></td><td>Wajib. Pilih unit aktif di site Anda.</td></tr><tr><td><strong>Tipe Inspeksi</strong></td><td>Wajib. Contoh seed: Daily Inspection (P2H), Weekly Inspection, Pre-Delivery Inspection (PDI).</td></tr><tr><td><strong>KM / HM saat inspeksi</strong></td><td>Wajib.</td></tr><tr><td><strong>Mulai</strong>, <strong>Driver/Mekanik</strong>, <strong>VIN</strong>, <strong>Konfigurasi Penggerak</strong></td><td>Terisi otomatis.</td></tr></tbody></table>
+<p>Jika unit belum punya kategori inspeksi: <em>Unit ini belum memiliki kategori inspeksi. Minta admin memasang kategori.</em></p>
+<p>Checklist <strong>belum dimuat</strong> sampai <strong>Daftar Kendaraan/Aset</strong> dan <strong>Tipe Inspeksi</strong> keduanya terisi. Placeholder: <em>Pilih kendaraan/aset dan tipe inspeksi untuk memuat checklist.</em></p>
+<p>Jika Anda sudah mengisi status, catatan, atau foto lalu mengubah <strong>Site</strong>, kendaraan, atau tipe: dialog <strong>Buang jawaban saat ini?</strong> — <em>Mengubah site, kendaraan, atau tipe inspeksi akan membuang status item, catatan, foto, dan catatan umum. KM/HM tetap disimpan.</em> Pilih <strong>Batal</strong> atau <strong>Buang jawaban</strong>.</p>
+<figure><img class="shot" src="images/03-inspeksi-baru.png" alt="Formulir inspeksi baru" /><figcaption class="caption">Gambar 3. Pilih kendaraan/aset, tipe inspeksi, dan isi KM/HM.</figcaption></figure>
+<h3>4.3 Checklist walk-around</h3>
+<p>Checklist disusun dari <strong>Kategori Kendaraan/Aset</strong> unit → kategori inspeksi terpasang (urutan berlawanan arah jarum jam) → item terpasang, <strong>dikurangi</strong> item yang dikecualikan pada <strong>Tipe Inspeksi</strong> yang dipilih. Jika admin tidak mengecualikan apa pun, checklist sama dengan seluruh kumpulan item unit.</p>
+<p>Petunjuk di layar: <em>Semua item dimulai sebagai OK — ubah status hanya jika menemukan masalah.</em></p>
+<p>Progres: <code>{n}/{total} item ditandai</code>.</p>
+<p>Untuk setiap item:</p>
+<ol><li>Baca nama item dan <strong>Panduan Teknis</strong>.</li><li>Biarkan <strong>OK</strong> jika tidak ada masalah.</li><li>Jika ada masalah, pilih status yang tersedia untuk item itu: <strong>Not OK</strong>, <strong>Korosi</strong>, <strong>Kurang</strong>, atau <strong>Longgar</strong> (tergantung <strong>Pilihan Status</strong> item).</li><li><strong>Catatan temuan</strong> (<em>Jelaskan temuan...</em>) boleh diisi pada OK maupun temuan.</li><li>Foto bersifat <strong>Foto (opsional)</strong> untuk semua status.</li></ol>
+<p>Cara mengambil foto:</p>
+<ol><li>Klik <strong>Ambil foto</strong> (kamera belakang jika tersedia).</li><li>Jika perangkat mendukung lampu terus-menerus, tombol <strong>Lampu kilat</strong> muncul di samping <strong>Jepret</strong>. Ketuk untuk nyala/mati. Tombol disembunyikan jika kamera tidak mendukung (banyak komputer meja dan sebagian iOS). Default <strong>mati</strong>.</li><li><strong>Jepret</strong>.</li><li><strong>Ulangi</strong> atau <strong>Gunakan foto</strong>.</li><li>Tunggu <strong>Memproses...</strong> (kompresi, maksimum 500 KB). Cap tanggal/waktu, GPS atau <em>GPS tidak tersedia</em>, lokasi, dan nama pemeriksa tertanam di foto.</li></ol>
+<p>Jika kamera ditolak: <em>Kamera tidak tersedia. Izinkan akses kamera.</em> Unggah berkas gambar. Hanya format gambar yang diterima. Lampu kilat <strong>tidak</strong> tersedia pada unggah berkas.</p>
+<p>Opsional di akhir: <strong>Catatan umum</strong> — <em>Ada hal lain yang perlu dilaporkan?</em></p>
+<figure><img class="shot" src="images/04-checklist.png" alt="Checklist item inspeksi" /><figcaption class="caption">Gambar 4. Semua item mulai sebagai OK. Catatan dan foto opsional pada setiap item; ubah status hanya pada temuan.</figcaption></figure>
+<h3>4.4 Simpan draf di perangkat</h3>
+<p>Tombol <strong>Simpan progres</strong> menyimpan ke perangkat ini (<em>Progres disimpan di perangkat ini</em>). Draf juga ditawarkan saat meninggalkan halaman: <strong>Simpan inspeksi ini?</strong> — <em>Anda memiliki inspeksi yang sedang diisi. Simpan draf di perangkat ini, atau buang.</em> Pilih <strong>Simpan draf</strong>, <strong>Buang draf</strong>, atau batal.</p>
+<p>Daftar draf muncul di <strong>Inspeksi Baru</strong> (<em>Draf di perangkat ini</em>) dan di <strong>Inspeksi Saya</strong>. <strong>Lanjutkan</strong> membuka draf; <strong>Hapus draf</strong> menghapusnya dari perangkat. Draf <strong>tidak</strong> ikut jika Anda ganti peramban, hapus data situs, atau pindah ke ponsel lain.</p>
+<h3>4.5 Kirim</h3>
+<p>Klik <strong>Kirim Inspeksi</strong>. Saat proses: <strong>Mengirim...</strong></p>
+<p>Syarat: kendaraan/aset, tipe inspeksi, KM/HM, dan semua item sudah diperiksa. Jika kurang: <em>Pilih kendaraan/aset, tipe inspeksi, isi KM/HM, dan periksa semua item.</em></p>
+<p>Setelah berhasil: <em>Inspeksi berhasil dikirim.</em> Status menjadi <strong>Terkirim</strong>. Draf terkait di perangkat dihapus.</p>
+<p><strong>Tidak dapat</strong> mengedit inspeksi yang sudah dikirim. Perbaiki kesalahan dengan inspeksi baru atau hubungi admin.</p>
+<h3>4.6 Melihat inspeksi sendiri</h3>
+<p>Menu <strong>Inspeksi Saya</strong> menampilkan kiriman Anda di server plus draf di perangkat. Filter kiriman: <strong>Unit</strong>, <strong>Tipe Inspeksi</strong>, <strong>Waktu inspeksi</strong> (Dari — Sampai), <strong>Status</strong> (<strong>Semua</strong> / <strong>Terkirim</strong> / <strong>Disetujui</strong> / <strong>Ditolak</strong>).</p>
+<p>Kolom: Tanggal, Unit, Tipe Inspeksi, Driver/Mekanik, KM/HM, <strong>Diperiksa</strong>, temuan, Status, Disetujui oleh, <strong>Lihat</strong>.</p>
+<p>Klik <strong>Lihat</strong> untuk <strong>Detail Inspeksi</strong>: KM/HM, tipe, driver/mekanik, mulai, selesai, durasi (<strong>mnt</strong>), admin penyetuju, persetujuan, tabel <strong>Item temuan</strong> dan <strong>Semua item</strong>.</p>
+<p>Driver/mekanik <strong>tidak</strong> melihat tombol <strong>Setujui</strong> / <strong>Tolak</strong>.</p>
+<hr />
+<h2 id="bab-5"><span class="chap">05</span>SOP Admin Site</h2>
+<p>Admin site mengelola site miliknya: pengguna Driver/Mekanik, daftar kendaraan, persetujuan inspeksi, dan rekap.</p>
+<h3>5.1 Pengguna &amp; Peran</h3>
+<p>Buka <strong>Pengguna &amp; Peran</strong>. Admin site hanya membuat <strong>Driver</strong> dan <strong>Mekanik</strong> untuk site-nya. Petunjuk di layar: <em>Admin site hanya dapat membuat akun Driver dan Mekanik untuk site-nya.</em> Saat ubah, field <strong>Peran</strong> tidak dapat diganti.</p>
+<p>Kolom form: <strong>Nama</strong>, <strong>Email</strong>, <strong>Peran</strong>, <strong>Site</strong> (otomatis), <strong>Kata sandi</strong>, <strong>Aktif</strong>.</p>
+<p>Tombol: <strong>Tambah</strong>, <strong>Ubah</strong>, <strong>Hapus</strong>, <strong>Cari...</strong>, <strong>Simpan</strong>, <strong>Batal</strong>. Hapus: <em>Hapus data ini?</em> — <em>Tindakan ini tidak dapat dibatalkan.</em></p>
+<figure><img class="shot" src="images/10-pengguna.png" alt="Pengguna dan peran" /><figcaption class="caption">Gambar 5. Admin site mengelola akun Driver dan Mekanik.</figcaption></figure>
+<h3>5.2 Daftar Kendaraan/Aset</h3>
+<p>Buka <strong>Daftar Kendaraan/Aset</strong>. Site mengikuti akun login (tidak ada pemilih Site).</p>
+<table><thead><tr><th>Kolom</th><th>Wajib</th></tr></thead><tbody><tr><td><strong>Nomor VIN Unit</strong></td><td>Ya</td></tr><tr><td><strong>Nomor Lambung</strong></td><td>Ya</td></tr><tr><td><strong>Nomor Polisi</strong></td><td>Tidak</td></tr><tr><td><strong>Kategori Kendaraan/Aset</strong></td><td>Ya — menentukan checklist</td></tr><tr><td><strong>Aktif</strong></td><td>—</td></tr></tbody></table>
+<p>Merek dan model tampil dari kategori kendaraan.</p>
+<h3>5.3 Menyetujui atau menolak inspeksi</h3>
+<ol><li>Buka <strong>Laporan Inspeksi</strong>.</li><li>Filter <strong>Status</strong> = <strong>Terkirim</strong> (atau <strong>Menunggu</strong> di kartu beranda).</li><li>Klik <strong>Lihat</strong>.</li><li>Pada kartu persetujuan: isi <strong>Catatan admin</strong> (opsional) lalu <strong>Setujui</strong> atau <strong>Tolak</strong>.</li></ol>
+<p>Hanya inspeksi berstatus <strong>Terkirim</strong> yang dapat diproses. Setelah <strong>Disetujui</strong> atau <strong>Ditolak</strong>, kartu persetujuan tidak muncul lagi.</p>
+<figure><img class="shot" src="images/05-laporan.png" alt="Laporan inspeksi" /><figcaption class="caption">Gambar 6. Filter dan daftar laporan inspeksi.</figcaption></figure>
+<figure><img class="shot" src="images/06-detail-persetujuan.png" alt="Detail dan persetujuan" /><figcaption class="caption">Gambar 7. Detail inspeksi dengan tombol Setujui dan Tolak.</figcaption></figure>
+<h3>5.4 Rekap Kendaraan Site</h3>
+<p>Menu <strong>Rekap Kendaraan Site</strong> — <em>Matriks Harian · Ringkasan</em>.</p>
+<ul><li>Rentang tanggal maksimum <strong>92 hari</strong>.</li><li><strong>Matriks Harian:</strong> kisi unit × tanggal. Hijau = <strong>Diinspeksi, semua OK</strong>; merah = <strong>Ada temuan</strong>; abu = <strong>Belum diinspeksi</strong>. Klik sel untuk membuka detail. <strong>Ekspor CSV Matriks</strong>.</li><li><strong>Ringkasan:</strong> agregat per unit (Nomor Lambung, VIN, Merek, Model, Konfigurasi Penggerak, Total Inspeksi, Hari Diinspeksi, Temuan, Ada Temuan, Disetujui, Menunggu, Inspeksi Terakhir, KM/HM Terakhir). <strong>Ekspor CSV Ringkasan</strong>.</li></ul>
+<figure><img class="shot" src="images/07-rekap.png" alt="Rekap matriks harian" /><figcaption class="caption">Gambar 8. Matriks harian rekap kendaraan site.</figcaption></figure>
+<p><strong>Ekspor CSV</strong> juga tersedia di Laporan Inspeksi (mengikuti filter aktif).</p>
+<hr />
+<h2 id="bab-6"><span class="chap">06</span>SOP Admin Perusahaan</h2>
+<p>Admin perusahaan mengelola master data perusahaan (bukan menu Perusahaan) dan semua site di perusahaannya.</p>
+<h3>6.1 Site</h3>
+<p><strong>Site:</strong> <strong>Nama</strong>, <strong>Kode</strong>, <strong>Lokasi</strong>, <strong>Aktif</strong>. Perusahaan terisi otomatis. Hapus ditolak jika masih ada kendaraan atau pengguna.</p>
+<h3>6.2 Item, kategori, dan tipe inspeksi</h3>
+<p>Urutan kerja yang disarankan:</p>
+<ol><li><strong>Item Inspeksi</strong> — <strong>Nama</strong>, <strong>Panduan Teknis</strong>, <strong>Pilihan Status</strong> (OK, Not OK, Korosi, Kurang, Longgar), <strong>Aktif</strong>.</li><li><strong>Kategori Inspeksi</strong> — <strong>Nama</strong>, <strong>Deskripsi</strong>. Klik <strong>Atur item</strong> untuk <strong>Item Terpasang</strong> (urutan walk-around). Panel <strong>Terpasang (berurutan)</strong> vs <strong>Tersedia</strong>; <strong>Pasang</strong>, <strong>Lepas</strong>, <strong>Naik</strong>, <strong>Turun</strong>. Satu item boleh ada di beberapa kategori.</li><li><strong>Tipe Inspeksi</strong> — <strong>Nama</strong>, <strong>Kode</strong>, <strong>Deskripsi</strong>, <strong>Aktif</strong>. Dipilih saat mulai inspeksi.</li><li><strong>Kecualikan item</strong> pada baris tipe membuka daftar <strong>Dikecualikan</strong> vs <strong>Tersedia</strong>. Subtitle: <em>Item yang dikecualikan dihilangkan dari checklist tipe ini. Kategori kendaraan tetap menentukan kumpulan item.</em> Kolom <strong>Item dikecualikan</strong> menampilkan jumlah. Daftar kosong = checklist penuh sesuai kategori kendaraan. Kategori yang seluruh itemnya dikecualikan tidak muncul di form.</li></ol>
+<figure><img class="shot" src="images/11-tipe-kecualikan.png" alt="Kecualikan item pada tipe inspeksi" /><figcaption class="caption">Gambar 9. Dialog Kecualikan item: pindahkan item ke Dikecualikan, lalu Simpan.</figcaption></figure>
+<h3>6.3 Kategori Kendaraan/Aset</h3>
+<p>Template merek/model/layout per perusahaan:</p>
+<ul><li><strong>Nama</strong>, <strong>Merek</strong>, <strong>Model</strong>, <strong>Konfigurasi Penggerak</strong> (4x2, 4x4, 6x2, 6x4, 6x6, 8x4, 8x8), <strong>Aktif</strong>.</li><li><strong>Atur kategori</strong> membuka <strong>Kategori Terpasang</strong>. Subtitle: <em>Urutan pergerakan berlawanan arah jarum jam.</em></li></ul>
+<p>Checklist unit = gabungan item dari semua kategori inspeksi yang dipasang ke kategori kendaraan itu, <strong>dikurangi</strong> item yang dikecualikan pada tipe inspeksi. Contoh: kategori <strong>EV Components</strong> hanya dipasang ke unit EV.</p>
+<figure><img class="shot" src="images/09-kategori-kendaraan.png" alt="Kategori terpasang pada kategori kendaraan" /><figcaption class="caption">Gambar 10. Pasang kategori inspeksi ke kategori kendaraan/aset.</figcaption></figure>
+<h3>6.4 Daftar kendaraan — wajib pilih Site</h3>
+<p>Admin perusahaan (dan superadmin) melihat pemilih <strong>Site</strong> di header daftar <strong>dan</strong> di form tambah/ubah. <strong>Site</strong> wajib. Unit milik satu site.</p>
+<p>Kolom sama seperti admin site, plus <strong>Site</strong>.</p>
+<figure><img class="shot" src="images/08-kendaraan.png" alt="Form daftar kendaraan dengan Site" /><figcaption class="caption">Gambar 11. Admin perusahaan wajib memilih Site saat menambah kendaraan/aset.</figcaption></figure>
+<h3>6.5 Pengguna</h3>
+<p>Admin perusahaan dapat membuat <strong>Admin Site</strong>, <strong>Driver</strong>, dan <strong>Mekanik</strong> (bukan Superadmin atau Admin Perusahaan lain). Pilih <strong>Perusahaan</strong> dan <strong>Site</strong> sesuai kebutuhan.</p>
+<h3>6.6 Inspeksi dan rekap</h3>
+<p>Sama seperti admin site, dengan pemilih <strong>Site</strong> di Laporan Inspeksi dan Rekap untuk berpindah site di dalam perusahaan. Filter <strong>Driver/Mekanik</strong> tersedia untuk admin. Dashboard menampilkan statistik seluruh site perusahaan.</p>
+<hr />
+<h2 id="bab-7"><span class="chap">07</span>SOP Superadmin</h2>
+<p>Superadmin memiliki semua menu Admin Perusahaan, plus <strong>Perusahaan</strong>.</p>
+<p><strong>Perusahaan:</strong> <strong>Nama</strong>, <strong>Kode</strong>, <strong>Alamat</strong>, <strong>Aktif</strong>. Hapus ditolak jika masih ada site.</p>
+<p>Di banyak halaman master, pilih <strong>Perusahaan</strong> (dan kadang <strong>Site</strong>) di header sebelum menambah data. Superadmin dapat membuat kelima peran. <strong>Admin Perusahaan</strong> tidak terikat site. Rekap mewajibkan pemilihan site.</p>
+<hr />
+<h2 id="bab-8"><span class="chap">08</span>Laporan, status, dan ekspor</h2>
+<table><thead><tr><th>Status</th><th>Arti</th></tr></thead><tbody><tr><td><strong>Terkirim</strong></td><td>Baru dikirim; menunggu admin</td></tr><tr><td><strong>Disetujui</strong></td><td>Admin menyetujui</td></tr><tr><td><strong>Ditolak</strong></td><td>Admin menolak</td></tr><tr><td><strong>Menunggu</strong></td><td>Masih menunggu persetujuan (kartu beranda)</td></tr></tbody></table>
+<p>Hanya admin (site, perusahaan, superadmin) yang menyetujui. Ekspor yang tersedia: <strong>Ekspor CSV</strong>, <strong>Ekspor CSV Matriks</strong>, <strong>Ekspor CSV Ringkasan</strong>. Tidak ada ekspor PDF per inspeksi.</p>
+<p>Jika ada beberapa inspeksi pada unit yang sama di hari yang sama, sel matriks mengikuti inspeksi terakhir hari itu; sel merah jika ada temuan.</p>
+<hr />
+<h2 id="bab-9"><span class="chap">09</span>Foto</h2>
+<ul><li>Foto <strong>opsional</strong> untuk setiap item (termasuk OK).</li><li>Maksimum <strong>500 KB</strong> setelah kompresi di perangkat.</li><li>Cap tertanam: tanggal/waktu, koordinat atau <em>GPS tidak tersedia</em>, nama tempat (jika GPS ada), ketinggian, nama pemeriksa, kompas.</li><li><strong>Lampu kilat</strong> hanya pada pratinjau kamera langsung jika perangkat mendukung lampu terus-menerus (bukan flash sekali jepret).</li><li>Disimpan di server aplikasi; tampil di detail (klik untuk memperbesar).</li><li>Masa simpan default <strong>90 hari</strong>. Setelah dibersihkan: <em>Foto telah dihapus setelah masa simpan 3 bulan; data inspeksi tetap tersimpan.</em></li></ul>
+<hr />
+<h2 id="bab-10"><span class="chap">10</span>Hierarki data</h2>
+<p>Checklist tidak disusun per unit satu per satu. Alurnya:</p>
+<pre><code>Perusahaan
+  ├─ Item Inspeksi
+  ├─ Kategori Inspeksi  ── memasang item (banyak-ke-banyak, berurutan)
+  ├─ Tipe Inspeksi  ── mengecualikan item dari kumpulan unit
+  ├─ Kategori Kendaraan/Aset  ── memasang kategori inspeksi (berurutan)
+  └─ Site
+       └─ Unit (Daftar Kendaraan/Aset)  ── satu kategori kendaraan
+            └─ Checklist = item kategori kendaraan − item dikecualikan tipe</code></pre>
+<p>Unit aktif tanpa kategori terpasang tidak dapat diinspeksi sampai admin memasang kategori.</p>
+<hr />
+<h2 id="bab-11"><span class="chap">11</span>Pertanyaan umum</h2>
+<p><strong>Checklist tidak muncul.</strong>   Pilih unit <strong>dan</strong> tipe inspeksi. Jika tetap kosong: minta Admin Perusahaan memasang <strong>Kategori Inspeksi</strong> ke <strong>Kategori Kendaraan/Aset</strong>, atau periksa <strong>Kecualikan item</strong> pada tipe itu.</p>
+<p><strong>Draf hilang.</strong>   Draf hanya di perangkat/peramban yang sama. Menghapus data situs atau ganti HP menghapus draf.</p>
+<p><strong>Tidak bisa masuk.</strong>   Periksa email/kata sandi, status <strong>Aktif</strong>, dan apakah akun terkunci 15 menit setelah 5 gagal. Tidak ada lupa kata sandi — hubungi admin.</p>
+<p><strong>Tidak ada tombol Setujui.</strong>   Hanya admin, dan hanya jika status <strong>Terkirim</strong>. Driver/mekanik tidak menyetujui.</p>
+<p><strong>Tidak ada tombol Lampu kilat.</strong>   Kamera perangkat tidak melaporkan lampu terus-menerus. Itu normal di banyak komputer. Unggah berkas juga tidak punya lampu kilat.</p>
+<p><strong>Foto hilang, datanya masih ada.</strong>   Masa simpan foto habis (~3 bulan). Catatan inspeksi tetap.</p>
+<p><strong>Salah kirim inspeksi.</strong>   Tidak dapat diedit. Kirim inspeksi baru atau minta admin menolak lalu ulangi sesuai prosedur site.</p>
+<p><strong>Mekanik vs Driver.</strong>   Label peran berbeda; menu dan hak inspeksi sama.</p>
+<p><strong>Rekap kosong / error rentang.</strong>   Pilih site (superadmin) dan rentang tidak lebih dari 92 hari.</p>
+<hr />
+<h2 id="lampiran-a-glosarium-status-item">Lampiran A — Glosarium status item</h2>
+<table><thead><tr><th>Kode</th><th>Label di layar (ID)</th></tr></thead><tbody><tr><td>OK</td><td>OK</td></tr><tr><td>NOT_OK</td><td>Not OK</td></tr><tr><td>KOROSI</td><td>Korosi</td></tr><tr><td>KURANG</td><td>Kurang</td></tr><tr><td>LONGGAR</td><td>Longgar</td></tr></tbody></table>
+<hr />
+<h2 id="lampiran-b-akun-demo-lingkungan-lokal-saja">Lampiran B — Akun demo (lingkungan lokal saja)</h2>
+<p>Akun berikut hanya untuk seed/demo lokal. <strong>Jangan dipakai sebagai SOP produksi.</strong> Jangan biarkan kata sandi demo di server bersama.</p>
+<table><thead><tr><th>Peran</th><th>Email</th><th>Kata sandi</th></tr></thead><tbody><tr><td>Admin Perusahaan</td><td>company.admin@iti.demo</td><td>Admin@1234</td></tr><tr><td>Admin Site</td><td>admin@iti.demo</td><td>Admin@1234</td></tr><tr><td>Driver</td><td>driver@iti.demo</td><td>Driver@1234</td></tr></tbody></table>
+<p>Mekanik seed (<code>mechanic@iti.demo</code>) tidak tampil di panel <strong>Akun demo</strong>. Superadmin dibuat dari variabel lingkungan server, bukan dari panel ini.</p>
+  </main>
+</body>
+</html>

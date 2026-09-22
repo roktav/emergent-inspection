@@ -1,0 +1,274 @@
+/* Inline Technology International — Visual Identity Guidelines
+   Palette: #231915 / #98A7D5 / #D6D2E9 / #FFFFFF
+   Type: Poppins (headings) · Roboto (body) */
+
+:root {
+  --ink: #231915;
+  --accent: #98a7d5;
+  --tint: #d6d2e9;
+  --paper: #ffffff;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Roboto", sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.55;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+h1, h2, h3, h4, .kicker, .cover-title, .cover-product, .toc a {
+  font-family: "Poppins", "Roboto", sans-serif;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+h1 { font-size: 20pt; margin: 0 0 10pt; line-height: 1.25; }
+h2 {
+  font-size: 14pt;
+  margin: 22pt 0 8pt;
+  padding-top: 6pt;
+  page-break-after: avoid;
+}
+h2 .chap {
+  display: inline-block;
+  color: var(--accent);
+  margin-right: 8pt;
+  font-size: 18pt;
+  font-weight: 700;
+}
+h3 { font-size: 11.5pt; margin: 14pt 0 6pt; page-break-after: avoid; }
+h4 { font-size: 10.5pt; margin: 10pt 0 4pt; }
+
+p { margin: 0 0 8pt; }
+ul, ol { margin: 0 0 10pt; padding-left: 18pt; }
+li { margin-bottom: 3pt; }
+
+strong { font-weight: 700; }
+em { font-style: italic; color: var(--ink); }
+
+a { color: var(--ink); text-decoration: none; }
+
+/* Cover */
+.cover {
+  page: cover;
+  page-break-after: always;
+  position: relative;
+  margin: 0;
+  width: 100%;
+  min-height: 297mm;
+  height: 297mm;
+  background: var(--ink);
+  color: var(--paper);
+  overflow: hidden;
+  padding: 22mm 20mm 24mm;
+}
+
+.cover-dots {
+  position: absolute;
+  right: -8mm;
+  top: 38mm;
+  width: 92mm;
+  height: 92mm;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 7mm;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.cover-dots span {
+  display: block;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.cover-dots span:nth-child(3n+2) { background: var(--tint); }
+
+.logo-plate {
+  display: inline-block;
+  background: var(--paper);
+  padding: 10mm 12mm;
+  border-radius: 2mm;
+}
+.logo-plate img {
+  display: block;
+  height: 28mm;
+  width: auto;
+}
+
+.cover-kicker {
+  margin-top: 48mm;
+  font-family: "Poppins", sans-serif;
+  font-size: 9pt;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--tint);
+  font-weight: 600;
+}
+.cover-title {
+  margin: 8pt 0 0;
+  font-size: 34pt;
+  line-height: 1.1;
+  color: var(--paper);
+  font-weight: 700;
+  max-width: 140mm;
+}
+.cover-product {
+  margin-top: 10pt;
+  font-size: 16pt;
+  color: var(--accent);
+  font-weight: 600;
+}
+.cover-rule {
+  width: 42mm;
+  height: 2.5pt;
+  background: var(--accent);
+  margin: 16pt 0 14pt;
+  border: 0;
+}
+.cover-meta {
+  font-size: 10pt;
+  color: var(--tint);
+  line-height: 1.6;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12pt;
+  padding: 0 0 8pt;
+  margin: 0 0 16pt;
+  border-bottom: 2.5pt solid var(--accent);
+}
+.sheet-head img { height: 11mm; width: auto; }
+.sheet-head .kicker {
+  margin: 0;
+  font-size: 8pt;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.content { padding: 0; }
+
+.callout {
+  border-left: 4pt solid var(--accent);
+  background: color-mix(in srgb, var(--tint) 35%, var(--paper));
+  padding: 8pt 10pt;
+  margin: 10pt 0 14pt;
+  page-break-inside: avoid;
+}
+.callout p:last-child { margin-bottom: 0; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8pt 0 14pt;
+  font-size: 9.5pt;
+  page-break-inside: auto;
+}
+thead { display: table-header-group; }
+tr { page-break-inside: avoid; }
+th {
+  background: var(--tint);
+  color: var(--ink);
+  font-family: "Poppins", sans-serif;
+  font-weight: 600;
+  text-align: left;
+  padding: 6pt 7pt;
+  border-bottom: 1pt solid var(--accent);
+}
+td {
+  padding: 5pt 7pt;
+  border-bottom: 0.5pt solid var(--tint);
+  vertical-align: top;
+}
+
+pre, code {
+  font-family: "Roboto", monospace;
+  font-size: 8.5pt;
+}
+pre {
+  background: color-mix(in srgb, var(--tint) 40%, var(--paper));
+  border-left: 3pt solid var(--accent);
+  padding: 8pt 10pt;
+  white-space: pre-wrap;
+  page-break-inside: avoid;
+}
+
+img.shot {
+  display: block;
+  width: 100%;
+  max-height: 145mm;
+  object-fit: contain;
+  object-position: top;
+  border: 1pt solid var(--tint);
+  margin: 8pt 0 4pt;
+  background: var(--paper);
+  page-break-inside: avoid;
+}
+.caption {
+  font-size: 8.5pt;
+  font-style: italic;
+  color: var(--ink);
+  margin: 0 0 14pt;
+}
+
+.toc {
+  page-break-after: always;
+}
+.toc h1 { margin-bottom: 14pt; }
+.toc ol { list-style: none; padding: 0; margin: 0; }
+.toc li {
+  display: flex;
+  align-items: baseline;
+  margin: 0 0 7pt;
+  font-size: 11pt;
+}
+.toc a { flex: 1; }
+.toc .num {
+  color: var(--accent);
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  width: 18pt;
+}
+
+hr {
+  border: 0;
+  border-top: 1pt solid var(--tint);
+  margin: 16pt 0;
+}
+
+@page {
+  size: A4;
+  margin: 16mm 16mm 18mm 16mm;
+  @bottom-left {
+    content: "Inline Technology International";
+    font-family: "Roboto", sans-serif;
+    font-size: 8pt;
+    color: #231915;
+  }
+  @bottom-right {
+    content: counter(page);
+    font-family: "Poppins", sans-serif;
+    font-size: 9pt;
+    color: #98a7d5;
+  }
+}
+
+@page:first {
+  margin: 0;
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+}
+
+@media print {
+  .cover { min-height: 297mm; }
+}
