@@ -19,7 +19,8 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
 
-from auth import (check_lockout, clear_failures, create_access_token, get_current_user, hash_password,
+from auth import (check_lockout, clear_failures, create_access_token, create_refresh_token,
+                  get_current_user, hash_password, user_from_refresh_token,
                   record_failure, require_roles, verify_password)
 from database import client, db
 from seed import seed_all
@@ -203,6 +204,10 @@ class LoginIn(BaseModel):
     password: str
 
 
+class RefreshIn(BaseModel):
+    refresh_token: str
+
+
 # ---------- Helpers ----------
 def oid(id_: str) -> ObjectId:
     try:
@@ -305,8 +310,28 @@ async def login(body: LoginIn, request: Request):
     if not user.get("is_active", True):
         raise HTTPException(status_code=403, detail="Account is inactive")
     await clear_failures(identifier)
-    token = create_access_token(str(user["_id"]), email, user["role"])
-    return {"access_token": token, "token_type": "bearer", "user": User.from_mongo(user).out()}
+    uid = str(user["_id"])
+    token = create_access_token(uid, email, user["role"])
+    refresh = create_refresh_token(uid, email, user["role"])
+    return {
+        "access_token": token,
+        "refresh_token": refresh,
+        "token_type": "bearer",
+        "user": User.from_mongo(user).out(),
+    }
+
+
+@api_router.post("/auth/refresh")
+async def refresh_session(body: RefreshIn):
+    user = await user_from_refresh_token(body.refresh_token)
+    uid = str(user["_id"])
+    email = user["email"]
+    return {
+        "access_token": create_access_token(uid, email, user["role"]),
+        "refresh_token": create_refresh_token(uid, email, user["role"]),
+        "token_type": "bearer",
+        "user": User.from_mongo(user).out(),
+    }
 
 
 @api_router.get("/auth/me")
@@ -607,6 +632,38 @@ async def assign_vehicle_inspection_categories(id_: str, body: IdList, user: dic
     return VehicleCategory.from_mongo(await db.vehicle_categories.find_one({"_id": oid(id_)})).out()
 
 
+async def _load_checklist_lookups(company_ids: List[str]):
+    if not company_ids:
+        return {}, {}, {}
+    vcs = await db.vehicle_categories.find({"company_id": {"$in": company_ids}}).to_list(2000)
+    cats = await db.inspection_categories.find({"company_id": {"$in": company_ids}, "is_active": True}).to_list(2000)
+    items = await db.inspection_items.find({"company_id": {"$in": company_ids}, "is_active": True}).to_list(4000)
+    return (
+        {str(v["_id"]): v for v in vcs},
+        {str(c["_id"]): c for c in cats},
+        {str(i["_id"]): i for i in items},
+    )
+
+
+def _checklist_groups(truck: dict, itype: dict, vc_by_id: dict, cats_by_id: dict, items_by_id: dict) -> list:
+    excluded = set(itype.get("excluded_item_ids") or [])
+    cat_ids = []
+    vc_id = truck.get("vehicle_category_id")
+    if vc_id:
+        vc = vc_by_id.get(vc_id)
+        cat_ids = (vc or {}).get("category_ids") or []
+    groups = []
+    for cid in cat_ids:
+        c = cats_by_id.get(cid)
+        if not c:
+            continue
+        its = [InspectionItem.from_mongo(items_by_id[i]).out()
+               for i in c.get("item_ids", []) if i in items_by_id and i not in excluded]
+        if its:
+            groups.append({"category": InspectionCategory.from_mongo(c).out(), "items": its})
+    return groups
+
+
 # ---------- Inspections ----------
 @api_router.get("/inspections/checklist")
 async def checklist(truck_id: str, inspection_type_id: str, user: dict = Depends(require_roles(*ALL_ROLES))):
@@ -615,26 +672,40 @@ async def checklist(truck_id: str, inspection_type_id: str, user: dict = Depends
         "_id": oid(inspection_type_id), "company_id": truck["company_id"], "is_active": True})
     if not itype:
         raise HTTPException(status_code=400, detail="Invalid inspection type")
-    excluded = set(itype.get("excluded_item_ids") or [])
-    cat_ids = []
-    if truck.get("vehicle_category_id"):
-        vc = await db.vehicle_categories.find_one({"_id": oid(truck["vehicle_category_id"])})
-        cat_ids = (vc or {}).get("category_ids") or []
-    cats = {str(c["_id"]): c for c in await db.inspection_categories.find(
-        {"_id": {"$in": [oid(i) for i in cat_ids]}, "is_active": True}).to_list(200)}
-    all_item_ids = [i for cid in cat_ids if cid in cats for i in cats[cid].get("item_ids", [])]
-    items = {str(i["_id"]): i for i in await db.inspection_items.find(
-        {"_id": {"$in": [oid(i) for i in all_item_ids]}, "is_active": True}).to_list(2000)}
-    groups = []
-    for cid in cat_ids:
-        c = cats.get(cid)
-        if not c:
-            continue
-        its = [InspectionItem.from_mongo(items[i]).out()
-               for i in c.get("item_ids", []) if i in items and i not in excluded]
-        if its:
-            groups.append({"category": InspectionCategory.from_mongo(c).out(), "items": its})
-    return {"truck": await _enrich_truck(truck), "groups": groups}
+    vc_by_id, cats_by_id, items_by_id = await _load_checklist_lookups([truck["company_id"]])
+    return {"truck": await _enrich_truck(truck), "groups": _checklist_groups(truck, itype, vc_by_id, cats_by_id, items_by_id)}
+
+
+@api_router.get("/sync/field")
+async def sync_field(user: dict = Depends(require_roles(*ALL_ROLES))):
+    truck_docs = await db.dump_trucks.find({**site_scope(user), "is_active": True}).sort("hull_number", 1).to_list(2000)
+    company_ids = list({t["company_id"] for t in truck_docs if t.get("company_id")})
+    if user.get("company_id") and user["role"] != "superadmin" and user["company_id"] not in company_ids:
+        company_ids.append(user["company_id"])
+    type_docs = []
+    if company_ids:
+        type_docs = await db.inspection_types.find(
+            {"company_id": {"$in": company_ids}, "is_active": True}).sort("name", 1).to_list(2000)
+    vc_by_id, cats_by_id, items_by_id = await _load_checklist_lookups(company_ids)
+    types_by_company = {}
+    for td in type_docs:
+        types_by_company.setdefault(td["company_id"], []).append(td)
+    trucks = [await _enrich_truck(t) for t in truck_docs]
+    checklists = []
+    for truck in truck_docs:
+        for itype in types_by_company.get(truck.get("company_id"), []):
+            checklists.append({
+                "truck_id": str(truck["_id"]),
+                "inspection_type_id": str(itype["_id"]),
+                "truck": next(t for t in trucks if t["id"] == str(truck["_id"])),
+                "groups": _checklist_groups(truck, itype, vc_by_id, cats_by_id, items_by_id),
+            })
+    return {
+        "generated_at": now_iso(),
+        "trucks": trucks,
+        "inspection_types": [InspectionType.from_mongo(t).out() for t in type_docs],
+        "checklists": checklists,
+    }
 
 
 @api_router.post("/inspections")
@@ -685,8 +756,8 @@ def _inspection_list_filter(
     return flt
 
 
-async def _list_inspections_out(flt: dict, limit: int) -> List[dict]:
-    docs = await db.inspections.find(flt, {"results": 0}).sort("completed_at", -1).to_list(limit)
+async def _list_inspections_out(flt: dict, limit: int, skip: int = 0) -> List[dict]:
+    docs = await db.inspections.find(flt, {"results": 0}).sort("completed_at", -1).skip(skip).limit(limit).to_list(limit)
     out = []
     for d in docs:
         d["results"] = []
@@ -698,13 +769,17 @@ async def _list_inspections_out(flt: dict, limit: int) -> List[dict]:
 
 @api_router.get("/inspections")
 async def list_inspections(
+    response: Response,
     site_id: Optional[str] = None, truck_id: Optional[str] = None, status: Optional[str] = None,
     date_from: Optional[str] = None, date_to: Optional[str] = None, driver_id: Optional[str] = None,
-    inspection_type_id: Optional[str] = None, limit: int = 200,
+    inspection_type_id: Optional[str] = None,
+    skip: int = Query(0, ge=0), limit: int = Query(200, ge=1, le=500),
     user: dict = Depends(require_roles(*ALL_ROLES)),
 ):
     flt = _inspection_list_filter(user, site_id, truck_id, status, date_from, date_to, driver_id, inspection_type_id)
-    return await _list_inspections_out(flt, limit)
+    total = await db.inspections.count_documents(flt)
+    response.headers["X-Total-Count"] = str(total)
+    return await _list_inspections_out(flt, limit, skip)
 
 
 @api_router.get("/inspections/export")
@@ -954,6 +1029,7 @@ app.add_middleware(
     allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Total-Count"],
 )
 
 

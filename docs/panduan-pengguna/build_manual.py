@@ -133,7 +133,7 @@ TEMPLATE = """<!DOCTYPE html>
     <p class="cover-meta">
       Inline Technology International<br />
       Inspeksi harian chassis dump truck<br />
-      11 September 2026
+      16 September 2026
     </p>
   </section>
 

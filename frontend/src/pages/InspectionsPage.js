@@ -7,6 +7,7 @@ import { api, downloadCsv, errMsg } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { ApprovalBadge } from "../components/StatusPill";
 import { useLookup } from "../components/MasterPage";
+import { formatRange, ListPager, PAGE_SIZE, totalFromHeader } from "../components/ListPager";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -30,6 +31,8 @@ export default function InspectionsPage() {
   const [to, setTo] = useState(iso(new Date()));
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const companyId = useMemo(
     () => sites.find((s) => s.id === siteId)?.company_id || (!needsSitePicker ? user?.company_id : undefined),
@@ -62,11 +65,19 @@ export default function InspectionsPage() {
     date_to: to,
   }), [needsSitePicker, siteId, status, truckId, driverId, typeId, from, to]);
 
+  const paramsKey = JSON.stringify(params);
+  useEffect(() => { setPage(1); }, [paramsKey]);
+
   useEffect(() => {
     if (needsSitePicker && !siteId) return;
     setLoading(true);
-    api.get("/inspections", { params }).then((r) => setRows(r.data)).finally(() => setLoading(false));
-  }, [needsSitePicker, siteId, params]);
+    api.get("/inspections", { params: { ...params, skip: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE } })
+      .then((r) => {
+        setRows(r.data);
+        setTotal(totalFromHeader(r, r.data.length));
+      })
+      .finally(() => setLoading(false));
+  }, [needsSitePicker, siteId, params, page]);
 
   const exportCsv = async () => {
     setExporting(true);
@@ -84,7 +95,7 @@ export default function InspectionsPage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="font-heading text-2xl font-semibold tracking-tight lg:text-3xl">{t("inspections")}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{rows.length} {t("items")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{formatRange(t, page, PAGE_SIZE, total)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" className="rounded-full" onClick={exportCsv} disabled={exporting || (needsSitePicker && !siteId)} data-testid="inspections-export-btn">
@@ -207,6 +218,7 @@ export default function InspectionsPage() {
             </TableBody>
           </Table>
         </div>
+        <ListPager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} testId="inspections-pager" />
       </div>
     </div>
   );

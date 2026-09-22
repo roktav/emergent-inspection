@@ -4,7 +4,7 @@ Rebuild spec for the current application. A developer who has never opened this 
 
 This is a **Technical Design Document**, not a test-driven-development guide. It describes **what the system must do**, not how every file is laid out today.
 
-**Product version captured:** post-1.7.0 working tree (inspection-type item excludes + in-app camera torch). Released README still lists **1.7.0** (15 Sep 2026).
+**Product version captured:** Capacitor Android shell, 30-day refresh tokens, field snapshot + outbox. README **1.9.0** (22 Sep 2026, 11:21 WIB).
 
 ---
 
@@ -27,9 +27,9 @@ Inspectors work on phones at the unit. Admins maintain company catalogs (items, 
 |------------|------|
 | Hosting | Self-hosted. No cloud object store. Photos live on **local disk** (`STORAGE_ROOT`). |
 | Schema | **Additive, idempotent migrations only.** Never wipe Mongo collections to “migrate.” |
-| Drafts | In-progress forms live in **browser `localStorage`**, not the API. |
+| Drafts | In-progress forms live in **browser `localStorage`**, not the API. Field photos/outbox use **IndexedDB**. |
 | Languages | English and Indonesian (`en` / `id`). |
-| Auth | JWT access tokens, **12 hours**, HS256. |
+| Auth | JWT access tokens **12 hours** plus refresh tokens **30 days**, HS256. |
 | Photo size | Client compresses to JPEG **≤ 500 KB**; server rejects anything larger. |
 | Photo URLs | Files are fetched with `Authorization`. **Do not put the session token in the image URL.** |
 | Company mixing | Inspection types, items, and vehicle categories belong to a **company**. A unit at company A cannot use a type from company B. |
@@ -40,6 +40,7 @@ Inspectors work on phones at the unit. Admins maintain company catalogs (items, 
 - Multi-region object storage.
 - Server-side GPS or EXIF parsing (stamps are burned in on the client).
 - Real-time sync of drafts across devices.
+- Play Store listing, iOS, admin offline mode.
 
 ---
 
@@ -48,10 +49,12 @@ Inspectors work on phones at the unit. Admins maintain company catalogs (items, 
 ```mermaid
 flowchart LR
   browser[ReactSPA]
+  apk[AndroidWebView]
   api[FastAPI_api]
   mongo[MongoDB7]
   disk[LocalPhotoDisk]
   browser -->|"Bearer JWT"| api
+  apk -->|"Bearer JWT + refresh"| api
   api --> mongo
   api --> disk
 ```
@@ -59,6 +62,7 @@ flowchart LR
 | Layer | Choice |
 |-------|--------|
 | SPA | React 19, CRA + Craco, React Router 7, Tailwind + Radix/shadcn, axios |
+| Android | Capacitor wrapping the same SPA (`frontend/android/`, appId `id.co.iti.inspeksidt`) |
 | API | FastAPI, Pydantic v2, Motor (async Mongo), PyJWT, bcrypt |
 | Database | MongoDB 7, database name `dt_inspection` |
 | Photos | Directory under `STORAGE_ROOT`, metadata in `files` |
@@ -70,7 +74,7 @@ flowchart LR
 - Compose (closest to production): frontend **8802**, API **8801**, Mongo unpublished on the compose network.
 - Host development: frontend **3000**, API **8000**, Mongo **27017**.
 
-`REACT_APP_BACKEND_URL` is **baked at frontend build time**. Changing it requires a frontend rebuild.
+`REACT_APP_BACKEND_URL` is **baked at frontend build time**. Changing it requires a frontend rebuild. The Android APK cannot use `localhost` for the API host; bake a reachable hostname. CORS must allow the WebView origin `https://localhost`.
 
 ---
 
@@ -291,11 +295,12 @@ Purge clears `results[].photos` and marks `files` deleted. The inspection row re
 ### 4.1 Token
 
 - Algorithm HS256, secret `JWT_SECRET`.
-- Claims: `sub` (user id), `email`, `role`, `type: "access"`, `exp` (+12h UTC).
-- Sent as `Authorization: Bearer <token>` (cookie `access_token` also accepted).
+- Access claims: `sub` (user id), `email`, `role`, `type: "access"`, `exp` (+12h UTC).
+- Refresh claims: same plus `type: "refresh"`, `exp` (+30d UTC). Login and refresh rotate both tokens. Inactive or missing users cannot refresh (401).
+- Access token sent as `Authorization: Bearer <token>` (cookie `access_token` also accepted).
 - User must exist and `is_active != false`.
 
-Client stores the token in `localStorage` key **`dt_token`**. Axios attaches it; **401** clears the token and redirects to `/login`.
+Client stores the access token in `localStorage` key **`dt_token`** and the refresh token in **`dt_refresh`**. Axios attaches the access token. On **401**, try `POST /auth/refresh` once, then retry the request. If refresh fails **and the device is online**, clear tokens and redirect to `/login`. An offline 401 must not wipe the outbox IndexedDB. Cached user JSON is in **`dt_user`** so `/auth/me` can fail offline after the first login.
 
 ### 4.2 Login lockout
 
@@ -358,7 +363,8 @@ Base path: `/api`. Unless noted, JWT required.
 
 | Method | Path | Notes |
 |--------|------|--------|
-| POST | `/auth/login` | `{ email, password }` → `{ access_token, token_type, user }` |
+| POST | `/auth/login` | `{ email, password }` → `{ access_token, refresh_token, token_type, user }` |
+| POST | `/auth/refresh` | `{ refresh_token }` → new access + refresh. 401 if token type is not `refresh` or user inactive |
 | GET | `/auth/me` | Adds `site_name`, `company_name` |
 | POST | `/auth/logout` | `{ ok: true }` (stateless) |
 
@@ -390,8 +396,9 @@ Read: all roles. Write: `superadmin`, `company_admin`. Superadmin may pass `?com
 | Method | Path | Notes |
 |--------|------|--------|
 | GET | `/inspections/checklist` | **Required query:** `truck_id`, `inspection_type_id`. 400 if type missing/inactive/wrong company. |
+| GET | `/sync/field` | One snapshot: `{ generated_at, trucks, inspection_types, checklists: [{ truck_id, inspection_type_id, truck, groups }] }`. Same composition as `/inspections/checklist` (category items minus `excluded_item_ids`). Scoped like trucks. All roles. |
 | POST | `/inspections` | See `InspectionCreate` below. 400 empty results or excluded item ids. |
-| GET | `/inspections` | Filters: `site_id`, `truck_id`, `status`, `date_from`, `date_to`, `driver_id`, `inspection_type_id`, `limit` default 200. List omits `results`. Field roles cannot override `driver_id`. |
+| GET | `/inspections` | Filters: `site_id`, `truck_id`, `status`, `date_from`, `date_to`, `driver_id`, `inspection_type_id`, `skip` default 0, `limit` default 200 (max 500). JSON array (omits `results`). `X-Total-Count` is the filtered total (CORS-exposed). Field roles cannot override `driver_id`. |
 | GET | `/inspections/export` | Same filters, CSV, max 10 000 rows. |
 | GET | `/inspections/{id}` | Full document including results. |
 | POST | `/inspections/{id}/approval` | `{ decision: "approved" \| "rejected", admin_note? }`. site_admin+. |
@@ -479,8 +486,10 @@ Must not load a checklist until **both** unit and inspection type are chosen. Pl
 
 - Key: `dt_inspection_drafts_{userId}`
 - Shape: `{ id, site_id, truck_id, type_id, km_hm, general_note, started_at, results, saved_at }`
+- `results[].photos` may be server paths **or** `{ localId }` (IndexedDB JPEG) until sync.
 - Autosave ~1.5s when the form has data; manual “Save progress”; leave-route blocker (save / discard / stay).
 - Resume via `?draft={id}`. Shown on **Inspeksi Saya** for field roles.
+- Offline submit (driver/mechanic): validate against the cached checklist, enqueue the outbox, treat as success from the user’s point of view (**Queued**). Online submit: upload any local blobs then `POST /inspections`.
 
 ### 6.4 Camera and photo stamp
 
@@ -492,13 +501,32 @@ In-app overlay (not the OS camera, unless fallback):
 4. Compress JPEG: max dimension 1280, quality loop, **≤ 500 KB**.
 5. **Stamp burned into the pixels** before upload: datetime, lat/lon or “GPS unavailable”, up to two reverse-geocode lines (BigDataCloud, ~50 m cache), altitude + inspector name, compass rose. GPS/heading are **client-only**.
 6. If `getUserMedia` fails: file input `accept="image/*" capture="environment"` — no flash promise.
-7. Upload `POST /uploads`; store returned path on the item.
+7. On the **website while online**, `POST /uploads` immediately and store the returned path. On **native** (and on the web while offline), write the JPEG to IndexedDB and keep `{ localId }` until outbox sync.
+8. Native capture uses Capacitor `Camera.getPhoto`, then the same stamp + ≤ 500 KB compress. The OS camera UI replaces the in-app torch preview.
 
 ### 6.5 i18n
 
 Custom dict in `frontend/src/lib/i18n.js`, not i18next. `localStorage.dt_lang` (`en` default). `t(key)` falls back to English then the key.
 
-### 6.6 Auth images
+### 6.6 Field offline (Capacitor)
+
+Admins keep using the website. Field users (driver/mechanic) install the APK. **First login and first snapshot pull require a network.** After that, walk-around, photos, and save work without signal.
+
+| Store | Contents |
+|-------|----------|
+| Snapshot | Last `GET /sync/field` |
+| Photo blobs | JPEG bytes keyed by `localId` |
+| Outbox | `{ draftId, payload, photoLocalIds, status, error }` |
+
+Form reads trucks/types/checklist from the snapshot when offline. Missing combo: tell the user to sync while online.
+
+Sync (serial, resume-safe): refresh access token → pull snapshot → for each outbox item upload photos, rewrite `results[].photos` to server paths, `POST /inspections`, drop outbox + blobs. On `400` excluded-item: refresh snapshot, strip excluded ids if the remainder still covers the current checklist, retry once; otherwise mark that item failed. Non-field roles skip the outbox.
+
+Header **Sync** control: last synced, pending count, errors. Inspeksi Saya shows **Queued** as a client-only status (not a Mongo status). CSV export stays server-side rows only.
+
+Build: `cd frontend && yarn cap:sync`, then Android Studio **Build APK**. Debug live-reload: temporarily set `server.url` in `capacitor.config.ts` to the LAN CRA URL (`cleartext: true`).
+
+### 6.7 Auth images
 
 Inspection photos render through an authenticated blob fetch (`AuthImage` / `fetchFileObjectUrl`), never a naked `<img src>` with a token query param.
 
@@ -541,7 +569,7 @@ New schema work must be `migrate_00N` — never a collection drop.
 | `backend/tests/test_migrations.py` | No running server |
 | `backend/tests/backend_test.py` | Live API at `REACT_APP_BACKEND_URL` (default `http://localhost:8001`), pytest-xdist `-n 2` |
 
-Live suite covers auth, RBAC, truck/VIN, checklist sizes (EV 37 / ICE 29 when type has no excludes), type excludes, inspection create/approve, recap CSV headers, upload 500 KB limit, purge.
+Live suite covers auth (including refresh + inactive user), RBAC, truck/VIN, checklist sizes (EV 37 / ICE 29 when type has no excludes), type excludes, `GET /sync/field` matching checklist composition, inspection create/approve, recap CSV headers, upload 500 KB limit, purge.
 
 ### 7.4 Environment
 
@@ -561,11 +589,12 @@ REACT_APP_BACKEND_URL
 
 Implement in this order so each phase is demoable and testable.
 
-1. **Identity** — JWT login/me, lockout, companies / sites / users, `site_scope` / `company_scope`, seed superadmin.
+1. **Identity** — JWT login/me/refresh, lockout, companies / sites / users, `site_scope` / `company_scope`, seed superadmin.
 2. **Company catalog** — items, inspection categories, types, vehicle categories; assignment PUTs; item-delete `$pull`.
-3. **Fleet + checklist** — trucks with `vehicle_category_id`; `GET /checklist` composition + excludes; POST inspection 400 on excluded ids.
+3. **Fleet + checklist** — trucks with `vehicle_category_id`; `GET /checklist` composition + excludes; POST inspection 400 on excluded ids; `GET /sync/field`.
 4. **Form + camera** — wait for unit+type; dirty confirm; localStorage drafts; camera/torch/stamp/500 KB; `POST /uploads` + `GET /files` with Authorization.
-5. **Workflow** — list/detail/export filters; approval; field-user isolation; dashboard KPIs.
-6. **Ops** — recap matrix/summary + 92-day cap; photo retention cron + superadmin purge; EN/ID; Docker Compose.
+5. **Field offline** — IndexedDB snapshot/photos/outbox; Capacitor Android shell; refresh interceptor; Queued on Inspeksi Saya.
+6. **Workflow** — list/detail/export filters; approval; field-user isolation; dashboard KPIs.
+7. **Ops** — recap matrix/summary + 92-day cap; photo retention cron + superadmin purge; EN/ID; Docker Compose.
 
 Parity checklist for a rebuild: EV unit + empty-exclude type = 37 items; same unit + type excluding 2 chassis ids = 35; type that only excludes items from an unassigned category = still 37; field user cannot list another inspector’s inspections; desktop camera hides flash; overlay close stops the media tracks.

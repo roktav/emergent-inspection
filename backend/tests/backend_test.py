@@ -112,6 +112,60 @@ class TestAuth:
     def test_me_unauth(self):
         assert requests.get(f"{API}/auth/me").status_code == 401
 
+    def test_login_returns_refresh_token(self):
+        d = _login(DRIVER)
+        assert d.get("refresh_token")
+        r = requests.post(f"{API}/auth/refresh", json={"refresh_token": d["refresh_token"]})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body.get("access_token")
+        assert body.get("refresh_token")
+        me = requests.get(f"{API}/auth/me", headers=_auth(body["access_token"]))
+        assert me.status_code == 200
+        assert me.json()["role"] == "driver"
+
+    def test_refresh_rejects_access_token(self, driver_ctx):
+        r = requests.post(f"{API}/auth/refresh", json={"refresh_token": driver_ctx["token"]})
+        assert r.status_code == 401
+
+    def test_refresh_inactive_user(self, admin_ctx):
+        me = requests.get(f"{API}/auth/me", headers=_auth(admin_ctx["token"]), timeout=30).json()
+        email = f"refresh.inactive.{int(datetime.now(timezone.utc).timestamp())}@iti.demo"
+        created = requests.post(f"{API}/users", json={
+            "name": "Refresh Inactive", "email": email, "role": "driver",
+            "password": "Driver@1234", "site_id": me["site_id"],
+        }, headers=_auth(admin_ctx["token"]), timeout=30)
+        assert created.status_code == 200, created.text
+        uid = created.json()["id"]
+        try:
+            d = _login({"email": email, "password": "Driver@1234"})
+            assert d.get("refresh_token")
+            off = requests.put(f"{API}/users/{uid}", json={
+                "is_active": False, "name": "Refresh Inactive", "email": email, "role": "driver",
+                "site_id": me["site_id"],
+            }, headers=_auth(admin_ctx["token"]), timeout=30)
+            assert off.status_code == 200, off.text
+            denied = requests.post(f"{API}/auth/refresh", json={"refresh_token": d["refresh_token"]}, timeout=30)
+            assert denied.status_code == 401
+        finally:
+            requests.delete(f"{API}/users/{uid}", headers=_auth(admin_ctx["token"]), timeout=30)
+
+
+class TestFieldSync:
+    def test_snapshot_matches_checklist(self, driver_ctx):
+        tok = driver_ctx["token"]
+        snap = requests.get(f"{API}/sync/field", headers=_auth(tok), timeout=30)
+        assert snap.status_code == 200, snap.text
+        data = snap.json()
+        assert "generated_at" in data and "trucks" in data and "inspection_types" in data
+        assert data["trucks"] and data["inspection_types"] and data["checklists"]
+        row = data["checklists"][0]
+        live = _checklist(tok, row["truck_id"], row["inspection_type_id"])
+        assert live.status_code == 200, live.text
+        live_ids = [i["id"] for g in live.json()["groups"] for i in g["items"]]
+        snap_ids = [i["id"] for g in row["groups"] for i in g["items"]]
+        assert live_ids == snap_ids
+
 
 # ---------- Trucks (list + vehicle_category_id) ----------
 class TestTrucksSchema:
@@ -481,6 +535,28 @@ class TestInspectionListFilters:
                                 headers=_auth(tok))
         assert exported.status_code == 200
         assert len(exported.text.strip().splitlines()) - 1 == len(r.json())
+
+    def test_inspections_skip_limit_and_total(self, admin_ctx):
+        tok = admin_ctx["token"]
+        d0, d1 = self._range()
+        params = {"date_from": d0, "date_to": d1}
+        full = requests.get(f"{API}/inspections", params=params, headers={**_auth(tok), "Origin": "http://localhost:3000"})
+        assert full.status_code == 200
+        rows = full.json()
+        total = int(full.headers.get("X-Total-Count") or 0)
+        assert total >= len(rows)
+        assert len(rows) <= 200
+        expose = full.headers.get("Access-Control-Expose-Headers") or ""
+        assert "X-Total-Count" in expose
+        page1 = requests.get(f"{API}/inspections", params={**params, "skip": 0, "limit": 1}, headers=_auth(tok))
+        assert page1.status_code == 200
+        assert int(page1.headers.get("X-Total-Count") or 0) == total
+        assert len(page1.json()) == min(1, total)
+        if total >= 2:
+            page2 = requests.get(f"{API}/inspections", params={**params, "skip": 1, "limit": 1}, headers=_auth(tok))
+            assert page2.status_code == 200
+            assert len(page2.json()) == 1
+            assert page2.json()[0]["id"] != page1.json()[0]["id"]
 
 
 # ---------- Recap ----------

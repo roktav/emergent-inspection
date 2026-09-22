@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Camera, RefreshCw, Check, X, Zap } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
+import { Camera as CapCamera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import { useT } from "../lib/i18n";
@@ -68,6 +70,7 @@ export function CameraCapture({ open, onClose, onCapture, testId }) {
   const [sensors, setSensors] = useState({});
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+  const isNative = Capacitor.isNativePlatform();
 
   const stampLabels = useMemo(() => ({ gpsUnavailable: t("gps_unavailable"), msnm: t("msnm") }), [t]);
   const liveStamp = useMemo(
@@ -105,7 +108,7 @@ export function CameraCapture({ open, onClose, onCapture, testId }) {
   };
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || isNative) return undefined;
     let cancelled = false;
     (async () => {
       try {
@@ -142,7 +145,43 @@ export function CameraCapture({ open, onClose, onCapture, testId }) {
       streamRef.current?.getTracks().forEach((tr) => tr.stop());
       streamRef.current = null;
     };
-  }, [open]);
+  }, [open, isNative]);
+
+  useEffect(() => {
+    if (!open || !isNative || shot) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const photo = await CapCamera.getPhoto({
+          quality: 90,
+          resultType: CameraResultType.Uri,
+          source: CameraSource.Camera,
+          saveToGallery: false,
+        });
+        if (cancelled) return;
+        const src = photo.webPath || (photo.path ? Capacitor.convertFileSrc(photo.path) : null);
+        if (!src) throw new Error("no photo");
+        const blob = await (await fetch(src)).blob();
+        stampAtShotRef.current = buildStamp({ sensors: sensorsRef.current, takenBy: user?.name, labels: stampLabels });
+        setShot(blob);
+        try {
+          const preview = await compressImage(blob, MAX_BYTES, stampAtShotRef.current);
+          setPreviewUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return URL.createObjectURL(preview);
+          });
+        } catch {
+          setPreviewUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return URL.createObjectURL(blob);
+          });
+        }
+      } catch {
+        if (!cancelled) onClose();
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, isNative, shot]);
 
   useEffect(() => {
     if (!open || shot || noCamera) return;
@@ -233,20 +272,23 @@ export function CameraCapture({ open, onClose, onCapture, testId }) {
           </div>
         ) : (
           <>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className={`h-full w-full object-cover ${shot ? "hidden" : ""}`}
-            />
-            {!shot && <StampHud stamp={liveStamp} testId={`${testId}-stamp-hud`} />}
+            {!isNative && (
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`h-full w-full object-cover ${shot ? "hidden" : ""}`}
+              />
+            )}
+            {!shot && !isNative && <StampHud stamp={liveStamp} testId={`${testId}-stamp-hud`} />}
+            {isNative && !shot && <p className="px-8 text-center text-sm text-white/80">{t("take_photo")}…</p>}
             {shot && <img src={previewUrl} alt="captured" className="max-h-full max-w-full object-contain" />}
           </>
         )}
       </div>
       <div className="flex items-center justify-center gap-6 p-5" style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
-        {!noCamera && !shot && (
+        {!noCamera && !shot && !isNative && (
           <>
             {torchSupported && (
               <button

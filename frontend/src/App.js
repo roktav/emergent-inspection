@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import "@/App.css";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { LangProvider } from "./lib/i18n";
+import { OfflineProvider } from "./lib/offline/OfflineContext";
 import AppLayout from "./components/AppLayout";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -80,8 +81,10 @@ export default function App() {
   return (
     <LangProvider>
       <AuthProvider>
-        <RouterProvider router={router} />
-        <Toaster position="top-right" richColors toastOptions={{ style: { fontFamily: "Roboto, sans-serif" } }} />
+        <OfflineProvider>
+          <RouterProvider router={router} />
+          <Toaster position="top-right" richColors toastOptions={{ style: { fontFamily: "Roboto, sans-serif" } }} />
+        </OfflineProvider>
       </AuthProvider>
     </LangProvider>
   );

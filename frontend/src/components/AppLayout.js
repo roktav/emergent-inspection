@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import {
-  Building2, MapPin, Users, Truck, Layers, ListChecks, ClipboardCheck, PlusCircle,
-  BarChart3, LayoutDashboard, LogOut, Menu, X, Tags,
-} from "lucide-react";
+import { RefreshCw, Building2, MapPin, Users, Truck, Layers, ListChecks, ClipboardCheck, PlusCircle,
+  BarChart3, LayoutDashboard, LogOut, Menu, X, Tags, WifiOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useT } from "../lib/i18n";
+import { useOffline } from "../lib/offline/OfflineContext";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 
@@ -51,6 +50,44 @@ export function LangToggle() {
           {l}
         </button>
       ))}
+    </div>
+  );
+}
+
+function SyncControl() {
+  const { t } = useT();
+  const { field, online, syncing, pending, lastSyncedAt, sync } = useOffline();
+  if (!field) return null;
+  const pendingCount = pending.filter((p) => p.status !== "error").length;
+  const errCount = pending.filter((p) => p.status === "error").length;
+  return (
+    <div className="flex items-center gap-2" data-testid="sync-control">
+      {!online && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-800">
+          <WifiOff className="h-3 w-3" /> {t("offline")}
+        </span>
+      )}
+      {(pendingCount > 0 || errCount > 0) && (
+        <span className="text-[11px] text-muted-foreground" data-testid="sync-pending">
+          {pendingCount + errCount} {t("pending_sync")}
+        </span>
+      )}
+      <Button
+        variant="outline"
+        size="sm"
+        className="rounded-full"
+        disabled={syncing || !online}
+        onClick={() => sync()}
+        data-testid="sync-now-btn"
+      >
+        <RefreshCw className={`mr-1 h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
+        {t("sync")}
+      </Button>
+      {lastSyncedAt && (
+        <span className="hidden text-[11px] text-muted-foreground sm:inline">
+          {t("last_synced")}: {new Date(lastSyncedAt).toLocaleString()}
+        </span>
+      )}
     </div>
   );
 }
@@ -140,7 +177,10 @@ export default function AppLayout() {
             </button>
             <img src="/logo.png" alt="Inline Technology" className="h-7 lg:hidden" />
           </div>
-          <LangToggle />
+          <div className="flex items-center gap-2">
+            <SyncControl />
+            <LangToggle />
+          </div>
         </header>
         <main className="mx-auto max-w-7xl px-4 py-6 lg:px-8 lg:py-8">
           <Outlet />
