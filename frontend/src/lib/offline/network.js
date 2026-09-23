@@ -1,8 +1,11 @@
 import { Capacitor } from "@capacitor/core";
 import { Network } from "@capacitor/network";
 
-export const FIELD_ROLES = ["driver", "mechanic"];
-export const isFieldRole = (role) => FIELD_ROLES.includes(role);
+// Who may queue a walk-around offline. Distinct from backend FIELD_ROLES,
+// which only limits list/detail/dashboard to the user's own records.
+// company_admin and superadmin stay online-only.
+export const OFFLINE_ROLES = ["driver", "mechanic", "site_admin"];
+export const isOfflineRole = (role) => OFFLINE_ROLES.includes(role);
 
 export async function isOnline() {
   try {

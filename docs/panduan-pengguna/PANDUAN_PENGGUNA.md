@@ -1,8 +1,8 @@
 # Panduan Pengguna — Inspeksi Aset
 
 **Inline Technology International**  
-Versi aplikasi: **1.10.0**  
-Tanggal dokumen: 22 September 2026
+Versi aplikasi: **1.11.0**  
+Tanggal dokumen: 23 September 2026
 
 ---
 
@@ -26,7 +26,7 @@ Jika bahasa layar masih Inggris, klik **ID** pada sakelar **EN / ID**. Pilihan b
 - meminta persetujuan admin site;
 - melihat laporan dan rekap kendaraan per site.
 
-Setelah **Kirim Inspeksi**, data di server tidak dapat diubah. Dari halaman detail, **Ekspor PDF** mengunduh laporan inspeksi itu (header, checklist, dan foto). Tidak ada pemulihan kata sandi mandiri. Draf hanya tersimpan di peramban perangkat itu (bukan di server).
+Setelah **Kirim Inspeksi**, data di server tidak dapat diubah. Dari halaman detail, **Ekspor PDF** membuat laporan inspeksi itu (header, checklist, dan foto). Di situs web berkas terunduh. Di aplikasi Android tombol yang sama membuka lembar berbagi agar berkas dapat dibuka, disimpan, atau dikirim. Admin site dapat menyimpan inspeksi tanpa sinyal setelah **Sinkron** pertama, sama seperti driver dan mekanik. Admin perusahaan dan superadmin tetap membutuhkan jaringan. Tidak ada pemulihan kata sandi mandiri. Draf hanya tersimpan di peramban perangkat itu (bukan di server).
 
 ---
 
@@ -38,7 +38,7 @@ Hak akses mengikuti peran akun. **Mekanik** memiliki hak yang sama dengan **Driv
 | --- | --- | --- |
 | **Superadmin** | Semua menu, termasuk **Perusahaan** | — |
 | **Admin Perusahaan** | Beranda, Site, Pengguna & Peran, Kategori Kendaraan/Aset, Daftar Kendaraan/Aset, Kategori Inspeksi, Item Inspeksi, Tipe Inspeksi, Inspeksi Baru, Laporan Inspeksi, Rekap Kendaraan Site | Perusahaan |
-| **Admin Site** | Beranda, Pengguna & Peran, Daftar Kendaraan/Aset, Inspeksi Baru, Laporan Inspeksi, Rekap Kendaraan Site | Perusahaan, Site, master checklist (kategori/item/tipe inspeksi, kategori kendaraan) |
+| **Admin Site** | Beranda, Pengguna & Peran, Daftar Kendaraan/Aset, Inspeksi Baru, Laporan Inspeksi, **Inspeksi Saya**, Rekap Kendaraan Site, tombol **Sinkron** | Perusahaan, Site, master checklist (kategori/item/tipe inspeksi, kategori kendaraan) |
 | **Driver** | Beranda, Inspeksi Baru, **Inspeksi Saya** | Data Master, Rekap, persetujuan |
 | **Mekanik** | Sama dengan Driver | Sama dengan Driver |
 
@@ -46,7 +46,7 @@ Kelompok menu di sidebar:
 
 - **Beranda**
 - **Data Master** — sesuai peran
-- **Transaksi** — Inspeksi Baru; **Laporan Inspeksi** (admin) atau **Inspeksi Saya** (driver/mekanik)
+- **Transaksi** — Inspeksi Baru; **Laporan Inspeksi** (admin); **Inspeksi Saya** (driver, mekanik, dan admin site)
 - **Laporan** — Rekap Kendaraan Site (admin)
 
 Di bagian bawah sidebar: nama pengguna, lencana peran, nama site (jika ada), dan tombol **Keluar**.
@@ -315,7 +315,7 @@ Di banyak halaman master, pilih **Perusahaan** (dan kadang **Site**) di header s
 | **Ditolak** | Admin menolak |
 | **Menunggu** | Masih menunggu persetujuan (kartu beranda) |
 
-Hanya admin (site, perusahaan, superadmin) yang menyetujui. Ekspor daftar: **Ekspor CSV**, **Ekspor CSV Matriks**, **Ekspor CSV Ringkasan**. Di detail inspeksi, **Ekspor PDF** mengunduh laporan satu inspeksi: header, checklist tanpa kolom kategori, dan foto pada baris item. Tautan di PDF membuka kembali detail inspeksi itu, tempat foto dapat dibuka seperti di aplikasi.
+Hanya admin (site, perusahaan, superadmin) yang menyetujui. Ekspor daftar: **Ekspor CSV**, **Ekspor CSV Matriks**, **Ekspor CSV Ringkasan**. Di detail inspeksi, **Ekspor PDF** membuat laporan satu inspeksi: header, checklist tanpa kolom kategori, dan foto pada baris item. Tautan di PDF membuka kembali detail inspeksi itu, tempat foto dapat dibuka seperti di aplikasi. Di Android, **Ekspor PDF** membuka lembar berbagi sistem, bukan unduhan peramban.
 
 Jika ada beberapa inspeksi pada unit yang sama di hari yang sama, sel matriks mengikuti inspeksi terakhir hari itu; sel merah jika ada temuan.
 

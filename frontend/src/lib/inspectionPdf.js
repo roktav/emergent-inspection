@@ -1,5 +1,8 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { Capacitor } from "@capacitor/core";
+import { Directory, Filesystem } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 import { fetchFileObjectUrl } from "./api";
 
 const MARGIN = 14;
@@ -238,6 +241,31 @@ export async function downloadInspectionPdf(insp, t) {
 
   const fileHull = String(insp.truck_hull_number || "unit").replace(/[^\w.-]+/g, "_");
   const filename = `inspeksi_${fileHull}_${insp.inspection_date || "report"}.pdf`;
+
+  if (Capacitor.isNativePlatform()) {
+    // The Android WebView has no download manager attached, so the <a download>
+    // click below is silently a no-op inside the APK. Write the file to the app's
+    // cache directory instead (already exposed to Android's FileProvider by
+    // android/app/src/main/res/xml/file_paths.xml) and hand it to the system
+    // share sheet, so the inspector can open it in a PDF viewer, save it to
+    // Files/Drive, or send it on from the field.
+    const dataUri = doc.output("datauristring");
+    const base64 = dataUri.slice(dataUri.indexOf("base64,") + "base64,".length);
+    const { uri } = await Filesystem.writeFile({
+      path: filename,
+      data: base64,
+      directory: Directory.Cache,
+    });
+    try {
+      await Share.share({ title: filename, files: [uri], dialogTitle: filename });
+    } catch (err) {
+      const message = String(err?.message || err || "");
+      if (/cancel/i.test(message)) return;
+      throw err;
+    }
+    return;
+  }
+
   const blob = doc.output("blob");
   const href = URL.createObjectURL(blob);
   const a = document.createElement("a");

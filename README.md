@@ -2,7 +2,7 @@
 
 Daily dump-truck chassis inspection for site drivers: walk-around checklists, photo evidence, admin approval, and a site recap report.
 
-**Version 1.10.0** · 22 September 2026, 20:39 WIB
+**Version 1.11.0** · 23 September 2026, 11:10 WIB
 
 Stack: **React 19** (CRA + craco) · **FastAPI** · **MongoDB 7**. Photos are stored on local disk, not a cloud object store.
 
@@ -107,9 +107,9 @@ yarn start
 
 App: http://localhost:3000
 
-## Android APK (drivers / mechanics)
+## Android APK (drivers, mechanics, site admins)
 
-The APK wraps the same React app with Capacitor. Admins keep using the website. **First login and first Sync must be online.** After that, inspectors can complete a walk-around and take photos without signal; photos stay on the device until Sync uploads them.
+The APK wraps the same React app with Capacitor. Company admins and superadmins keep using the website online. **First login and first Sync must be online.** After that, a driver, mechanic, or site admin can complete a walk-around and take photos without signal; photos stay on the device until Sync uploads them.
 
 1. Point `REACT_APP_BACKEND_URL` at a host the phone can reach (not `localhost`). Include `https://localhost` in `CORS_ORIGINS`.
 2. From `frontend/`:
@@ -121,7 +121,7 @@ yarn cap:open
 
 3. In Android Studio, run on a device or **Build → Build APK**. Debug override: temporarily set `server.url` in `frontend/capacitor.config.ts` to your LAN CRA URL (`http://192.168.x.x:3000`) with `cleartext: true`, then `npx cap sync android`.
 
-Non-field roles that sign in on the APK skip the outbox and behave like the website.
+Company admins and superadmins that sign in on the APK skip the outbox and behave like the website. A site admin uses the same offline queue as a driver. Their **Inspeksi Saya** list is their own submissions; **Laporan Inspeksi** still shows the whole site.
 
 ## Seeded accounts
 
@@ -176,7 +176,13 @@ python3 docs/panduan-pengguna/build_intro_pptx.py
 
 ## Changelog
 
-Versions and timestamps follow git history. **1.10.0** is the latest (22 Sep 2026, 20:39 WIB).
+Versions and timestamps follow git history. **1.11.0** is the latest (23 Sep 2026, 11:10 WIB).
+
+### 1.11.0 — 23 Sep 2026, 11:10 WIB
+
+- Site admins queue a walk-around offline the same way drivers and mechanics do. Company admins and superadmins stay online-only
+- **Inspeksi Saya** for a site admin lists only their own submissions; the site report stays on **Laporan Inspeksi**
+- On Android, **Export PDF** writes the file and opens the system share sheet. The website still downloads it
 
 ### 1.10.0 — 22 Sep 2026, 20:39 WIB
 

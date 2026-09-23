@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { useAuth } from "../../context/AuthContext";
 import { useT } from "../i18n";
 import { errMsg } from "../api";
-import { isFieldRole, isOnline, subscribeNetwork } from "./network";
+import { isOfflineRole, isOnline, subscribeNetwork } from "./network";
 import { getLastSyncedAt, getSnapshot, pullSnapshot } from "./snapshot";
 import { listOutbox, runOutboxSync } from "./outbox";
 
@@ -19,7 +19,7 @@ export function OfflineProvider({ children }) {
   const [syncing, setSyncing] = useState(false);
 
   const userId = user?.id;
-  const field = isFieldRole(user?.role);
+  const field = isOfflineRole(user?.role);
 
   const reloadLocal = useCallback(async () => {
     setSnapshot(await getSnapshot());

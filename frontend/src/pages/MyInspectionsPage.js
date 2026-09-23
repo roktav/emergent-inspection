@@ -108,7 +108,10 @@ export default function MyInspectionsPage() {
     inspection_type_id: typeId === ALL ? undefined : typeId,
     date_from: from,
     date_to: to,
-  }), [status, truckId, typeId, from, to]);
+    // Site admins can list the whole site. This page is their own walk-arounds,
+    // drafts, and queue. Drivers and mechanics are already forced to self on the API.
+    driver_id: user?.role === "site_admin" ? userId : undefined,
+  }), [status, truckId, typeId, from, to, user?.role, userId]);
 
   const paramsKey = JSON.stringify(params);
   useEffect(() => { setPage(1); }, [paramsKey, status]);

@@ -8,7 +8,7 @@ import { useT } from "../lib/i18n";
 import { api, errMsg } from "../lib/api";
 import { answersDirty, deleteDraft, formHasData, getDraft, listDrafts, upsertDraft } from "../lib/inspectionDrafts";
 import { useOffline } from "../lib/offline/OfflineContext";
-import { isFieldRole, isOnline } from "../lib/offline/network";
+import { isOfflineRole, isOnline } from "../lib/offline/network";
 import { collectLocalIds, deletePhotoBlob, isLocalPhoto, savePhotoBlob } from "../lib/offline/photos";
 import { enqueueInspection, rewritePhotos, uploadLocalPhoto } from "../lib/offline/outbox";
 import { activeTrucks, activeTypes, checklistFromSnapshot, getSnapshot } from "../lib/offline/snapshot";
@@ -397,7 +397,7 @@ export default function InspectionFormPage() {
       const localIds = collectLocalIds(resultRows);
       const online = await isOnline();
       if (!online) {
-        if (!isFieldRole(user?.role)) {
+        if (!isOfflineRole(user?.role)) {
           toast.error(t("sync_offline"));
           return;
         }

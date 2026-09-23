@@ -4,7 +4,7 @@ Rebuild spec for the current application. A developer who has never opened this 
 
 This is a **Technical Design Document**, not a test-driven-development guide. It describes **what the system must do**, not how every file is laid out today.
 
-**Product version captured:** Asset Inspection (Indonesian: Inspeksi Aset). Inspection PDF export, device GPS stamp. README **1.10.0** (22 Sep 2026, 20:39 WIB).
+**Product version captured:** Asset Inspection (Indonesian: Inspeksi Aset). Site-admin offline queue, Android PDF share sheet. README **1.11.0** (23 Sep 2026, 11:10 WIB).
 
 ---
 
@@ -351,7 +351,7 @@ Legend: **R** read, **C** create, **U** update, **D** delete, **—** none. All 
 | Manual photo purge | C | — | — | — | — |
 | Cron photo purge | `WEBHOOK_CRON_SECRET` | — | — | — | — |
 
-Nav hides `/inspections` from field roles (they use `/my-inspections`) and hides master pages by role. Direct URL to `/inspections` is not extra-guarded on the client; the API still filters by `driver_id`.
+Nav hides `/inspections` from driver and mechanic (they use `/my-inspections`). A site admin sees both: `/inspections` for the site, and `/my-inspections` for their own submissions, drafts, and queue. Master pages stay hidden by role. Direct URL to `/inspections` is not extra-guarded on the client; the API still filters driver and mechanic by `driver_id`.
 
 ---
 
@@ -452,7 +452,7 @@ Retention: `PHOTO_RETENTION_DAYS` (default **90**). For inspections with `comple
 | `/inspections/new` | New inspection form | All roles |
 | `/inspections/:id` | Detail + approval | All roles (API-scoped) |
 | `/inspections` | Admin report list + CSV | Nav: site_admin+ |
-| `/my-inspections` | Own submissions + local drafts | Nav: driver, mechanic |
+| `/my-inspections` | Own submissions + local drafts + queued | Nav: site_admin, driver, mechanic. Site admin list is filtered with `driver_id` of the signed-in user so it does not duplicate `/inspections`. |
 | `/companies` | Companies CRUD | superadmin |
 | `/sites` | Sites | company_admin+ |
 | `/vehicle-categories`, `/categories`, `/items`, `/inspection-types` | Catalog | company_admin+ |
@@ -488,8 +488,8 @@ Must not load a checklist until **both** unit and inspection type are chosen. Pl
 - Shape: `{ id, site_id, truck_id, type_id, km_hm, general_note, started_at, results, saved_at }`
 - `results[].photos` may be server paths **or** `{ localId }` (IndexedDB JPEG) until sync.
 - Autosave ~1.5s when the form has data; manual “Save progress”; leave-route blocker (save / discard / stay).
-- Resume via `?draft={id}`. Shown on **Inspeksi Saya** for field roles.
-- Offline submit (driver/mechanic): validate against the cached checklist, enqueue the outbox, treat as success from the user’s point of view (**Queued**). Online submit: upload any local blobs then `POST /inspections`.
+- Resume via `?draft={id}`. Shown on **Inspeksi Saya** for site admin, driver, and mechanic.
+- Offline submit (site admin, driver, mechanic): validate against the cached checklist, enqueue the outbox, treat as success from the user’s point of view (**Queued**). Online submit: upload any local blobs then `POST /inspections`. Company admin and superadmin cannot enqueue.
 
 ### 6.4 Camera and photo stamp
 
@@ -506,7 +506,7 @@ In-app overlay (not the OS camera, unless fallback):
 
 ### 6.4.1 Inspection PDF
 
-From the detail page, **Export PDF** builds an A4 file in the browser (`jspdf`). It includes the header, notes, defect rows, and the full checklist. There is no category column. Photos are drawn in the item row. A link (and each photo) opens `/inspections/{id}` on the site that exported the file, where the existing click-to-open photo viewer is used. If the viewer is signed out, login returns to that inspection.
+From the detail page, **Export PDF** builds an A4 file in the browser (`jspdf`). It includes the header, notes, defect rows, and the full checklist. There is no category column. Photos are drawn in the item row. A link (and each photo) opens `/inspections/{id}` on the site that exported the file, where the existing click-to-open photo viewer is used. If the viewer is signed out, login returns to that inspection. On the website the file downloads through the browser. Inside the Android WebView the same button writes the PDF to the app cache (`@capacitor/filesystem`) and opens the system share sheet (`@capacitor/share`). Dismissing that sheet is not an error.
 
 ### 6.5 i18n
 
@@ -514,7 +514,7 @@ Custom dict in `frontend/src/lib/i18n.js`, not i18next. `localStorage.dt_lang` (
 
 ### 6.6 Field offline (Capacitor)
 
-Admins keep using the website. Field users (driver/mechanic) install the APK. **First login and first snapshot pull require a network.** After that, walk-around, photos, and save work without signal.
+Company admin and superadmin keep using the website online. Driver, mechanic, and site admin can install the APK. **First login and first snapshot pull require a network.** After that, walk-around, photos, and save work without signal. A site admin’s snapshot is the same site scope as a driver’s.
 
 | Store | Contents |
 |-------|----------|
@@ -524,7 +524,7 @@ Admins keep using the website. Field users (driver/mechanic) install the APK. **
 
 Form reads trucks/types/checklist from the snapshot when offline. Missing combo: tell the user to sync while online.
 
-Sync (serial, resume-safe): refresh access token → pull snapshot → for each outbox item upload photos, rewrite `results[].photos` to server paths, `POST /inspections`, drop outbox + blobs. On `400` excluded-item: refresh snapshot, strip excluded ids if the remainder still covers the current checklist, retry once; otherwise mark that item failed. Non-field roles skip the outbox.
+Sync (serial, resume-safe): refresh access token → pull snapshot → for each outbox item upload photos, rewrite `results[].photos` to server paths, `POST /inspections`, drop outbox + blobs. On `400` excluded-item: refresh snapshot, strip excluded ids if the remainder still covers the current checklist, retry once; otherwise mark that item failed. Company admin and superadmin skip the outbox. Backend `FIELD_ROLES` stays `driver` and `mechanic` so a site admin’s report list, detail, and dashboard still cover the whole site.
 
 Header **Sync** control: last synced, pending count, errors. Inspeksi Saya shows **Queued** as a client-only status (not a Mongo status). CSV export stays server-side rows only.
 
