@@ -24,6 +24,33 @@ const text = (value) => {
     .replace(/[^\u0000-\u00FF]/g, "?");
 };
 
+const LOOPBACK_HOST = /^(localhost|127\.0\.0\.1)$/i;
+
+const isLoopback = (origin) => {
+  try {
+    return LOOPBACK_HOST.test(new URL(origin).hostname);
+  } catch {
+    return false;
+  }
+};
+
+// The Android WebView and the NUC's published port are both localhost, so
+// window.location.origin is not the address a PDF reader can open later.
+const pdfSiteOrigin = () => {
+  const here = window.location.origin;
+  if (!isLoopback(here)) return here.replace(/\/$/, "");
+  const configured = (process.env.REACT_APP_PUBLIC_URL || "").trim().replace(/\/$/, "");
+  if (configured) return configured;
+  const api = (process.env.REACT_APP_BACKEND_URL || "").trim();
+  try {
+    const apiOrigin = new URL(api).origin;
+    if (!isLoopback(apiOrigin)) return apiOrigin;
+  } catch {
+    /* keep the page origin */
+  }
+  return here;
+};
+
 const loadPhoto = async (path) => {
   if (typeof path !== "string" || !path) return null;
   const url = await fetchFileObjectUrl(path);
@@ -157,7 +184,7 @@ export async function downloadInspectionPdf(insp, t) {
     : t("no_defects");
   doc.text(`${text(t(insp.status))}   ·   ${text(defectLine)}`, MARGIN, y);
 
-  const detailUrl = `${window.location.origin}/inspections/${insp.id}`;
+  const detailUrl = `${pdfSiteOrigin()}/inspections/${insp.id}`;
   y += 6;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);

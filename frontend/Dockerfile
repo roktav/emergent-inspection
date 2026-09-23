@@ -14,6 +14,11 @@ COPY . .
 ARG REACT_APP_BACKEND_URL
 ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
 
+# Host written into PDF links when the page itself is served from localhost
+# (NUC port 8802, or the Android WebView). Omit it for local yarn start.
+ARG REACT_APP_PUBLIC_URL
+ENV REACT_APP_PUBLIC_URL=$REACT_APP_PUBLIC_URL
+
 # package.json sets "homepage": "." so Capacitor can load assets from inside the
 # APK. The website is served from the domain root, where relative asset paths
 # break deep links like /inspections/<id>, so force absolute paths here.

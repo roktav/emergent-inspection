@@ -2,7 +2,7 @@
 
 Daily dump-truck chassis inspection for site drivers: walk-around checklists, photo evidence, admin approval, and a site recap report.
 
-**Version 1.11.0** · 23 September 2026, 11:10 WIB
+**Version 1.12.0** · 23 September 2026, 12:12 WIB
 
 Stack: **React 19** (CRA + craco) · **FastAPI** · **MongoDB 7**. Photos are stored on local disk, not a cloud object store.
 
@@ -41,6 +41,11 @@ STORAGE_ROOT=./data/uploads
 # Frontend → API. Used by Compose at image build time, and by `yarn start`.
 # Compose maps the API to host port 8801; a host uvicorn typically uses 8000.
 REACT_APP_BACKEND_URL=http://localhost:8801
+
+# PDF links when the page itself is localhost (port 8802) or the Android app.
+# A browser already on the public domain uses that domain and ignores this.
+# Another server must set this to its own domain, then rebuild the frontend image.
+REACT_APP_PUBLIC_URL=https://inspection.inlinetechint.org
 ```
 
 Generate secrets with `openssl rand -hex 32`.
@@ -60,7 +65,7 @@ docker compose up --build
 | API      | http://localhost:8801/api |
 | Mongo    | not published; only on the Compose network |
 
-The frontend image **bakes** `REACT_APP_BACKEND_URL` at build time. If you change it, rebuild:
+The frontend image **bakes** `REACT_APP_BACKEND_URL` and `REACT_APP_PUBLIC_URL` at build time. A PDF link follows the domain in the browser address bar. `REACT_APP_PUBLIC_URL` is used only when that address is localhost: the Compose port `8802`, or the Android app (`https://localhost`). It defaults to `https://inspection.inlinetechint.org`. On another server, set `REACT_APP_PUBLIC_URL` to that server’s domain before the rebuild. If you skip it, exports from localhost or the phone still open the old domain. Exports made while the browser is already on the new domain do not need this variable. After changing either baked value:
 
 ```bash
 docker compose up --build frontend
@@ -176,7 +181,12 @@ python3 docs/panduan-pengguna/build_intro_pptx.py
 
 ## Changelog
 
-Versions and timestamps follow git history. **1.11.0** is the latest (23 Sep 2026, 11:10 WIB).
+Versions and timestamps follow git history. **1.12.0** is the latest (23 Sep 2026, 12:12 WIB).
+
+### 1.12.0 — 23 Sep 2026, 12:12 WIB
+
+- PDF links follow the domain in the address bar
+- Exports from localhost:8802 or the Android app use `REACT_APP_PUBLIC_URL` (default `https://inspection.inlinetechint.org`). Another domain must set that variable and rebuild the frontend image
 
 ### 1.11.0 — 23 Sep 2026, 11:10 WIB
 

@@ -4,7 +4,7 @@ Rebuild spec for the current application. A developer who has never opened this 
 
 This is a **Technical Design Document**, not a test-driven-development guide. It describes **what the system must do**, not how every file is laid out today.
 
-**Product version captured:** Asset Inspection (Indonesian: Inspeksi Aset). Site-admin offline queue, Android PDF share sheet. README **1.11.0** (23 Sep 2026, 11:10 WIB).
+**Product version captured:** Asset Inspection (Indonesian: Inspeksi Aset). PDF links follow the live domain; localhost and the Android app use `REACT_APP_PUBLIC_URL`. README **1.12.0** (23 Sep 2026, 12:12 WIB).
 
 ---
 
@@ -74,7 +74,7 @@ flowchart LR
 - Compose (closest to production): frontend **8802**, API **8801**, Mongo unpublished on the compose network.
 - Host development: frontend **3000**, API **8000**, Mongo **27017**.
 
-`REACT_APP_BACKEND_URL` is **baked at frontend build time**. Changing it requires a frontend rebuild. The Android APK cannot use `localhost` for the API host; bake a reachable hostname. CORS must allow the WebView origin `https://localhost`.
+`REACT_APP_BACKEND_URL` and `REACT_APP_PUBLIC_URL` are **baked at frontend build time**. Changing either requires a frontend rebuild. The Android APK cannot use `localhost` for the API host; bake a reachable hostname. CORS must allow the WebView origin `https://localhost`. `REACT_APP_PUBLIC_URL` is the PDF link host when `window.location` is localhost (Compose port 8802 or the WebView). A non-localhost page uses its own origin. Docker defaults the public URL to `https://inspection.inlinetechint.org`; another domain must override it.
 
 ---
 
@@ -506,7 +506,7 @@ In-app overlay (not the OS camera, unless fallback):
 
 ### 6.4.1 Inspection PDF
 
-From the detail page, **Export PDF** builds an A4 file in the browser (`jspdf`). It includes the header, notes, defect rows, and the full checklist. There is no category column. Photos are drawn in the item row. A link (and each photo) opens `/inspections/{id}` on the site that exported the file, where the existing click-to-open photo viewer is used. If the viewer is signed out, login returns to that inspection. On the website the file downloads through the browser. Inside the Android WebView the same button writes the PDF to the app cache (`@capacitor/filesystem`) and opens the system share sheet (`@capacitor/share`). Dismissing that sheet is not an error.
+From the detail page, **Export PDF** builds an A4 file in the browser (`jspdf`). It includes the header, notes, defect rows, and the full checklist. There is no category column. Photos are drawn in the item row. A link (and each photo) opens `/inspections/{id}`. When the page host is a public domain, that host is used. When it is localhost — local Docker on port 8802, or the Android WebView — the link uses `REACT_APP_PUBLIC_URL` (Docker default `https://inspection.inlinetechint.org`), or the public API origin if that variable is unset. A local `yarn start` with a localhost API still links to localhost. The existing click-to-open photo viewer is on that page. If the viewer is signed out, login returns to that inspection. On the website the file downloads through the browser. Inside the Android WebView the same button writes the PDF to the app cache (`@capacitor/filesystem`) and opens the system share sheet (`@capacitor/share`). Dismissing that sheet is not an error.
 
 ### 6.5 i18n
 
@@ -585,6 +585,7 @@ CORS_ORIGINS
 WEBHOOK_CRON_SECRET, PHOTO_RETENTION_DAYS=90
 STORAGE_ROOT
 REACT_APP_BACKEND_URL
+REACT_APP_PUBLIC_URL   # PDF links from localhost / Android; default https://inspection.inlinetechint.org
 ```
 
 ---

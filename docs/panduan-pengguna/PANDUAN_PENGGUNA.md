@@ -1,7 +1,7 @@
 # Panduan Pengguna — Inspeksi Aset
 
 **Inline Technology International**  
-Versi aplikasi: **1.11.0**  
+Versi aplikasi: **1.12.0**  
 Tanggal dokumen: 23 September 2026
 
 ---
@@ -315,7 +315,7 @@ Di banyak halaman master, pilih **Perusahaan** (dan kadang **Site**) di header s
 | **Ditolak** | Admin menolak |
 | **Menunggu** | Masih menunggu persetujuan (kartu beranda) |
 
-Hanya admin (site, perusahaan, superadmin) yang menyetujui. Ekspor daftar: **Ekspor CSV**, **Ekspor CSV Matriks**, **Ekspor CSV Ringkasan**. Di detail inspeksi, **Ekspor PDF** membuat laporan satu inspeksi: header, checklist tanpa kolom kategori, dan foto pada baris item. Tautan di PDF membuka kembali detail inspeksi itu, tempat foto dapat dibuka seperti di aplikasi. Di Android, **Ekspor PDF** membuka lembar berbagi sistem, bukan unduhan peramban.
+Hanya admin (site, perusahaan, superadmin) yang menyetujui. Ekspor daftar: **Ekspor CSV**, **Ekspor CSV Matriks**, **Ekspor CSV Ringkasan**. Di detail inspeksi, **Ekspor PDF** membuat laporan satu inspeksi: header, checklist tanpa kolom kategori, dan foto pada baris item. Tautan di PDF membuka kembali detail inspeksi itu pada domain tempat aplikasi dibuka, sehingga foto dapat dibuka seperti di aplikasi. Jika PDF dibuat dari `localhost` atau aplikasi Android, tautan memakai domain publik yang disetel saat build (`REACT_APP_PUBLIC_URL`). Di Android, **Ekspor PDF** membuka lembar berbagi sistem, bukan unduhan peramban.
 
 Jika ada beberapa inspeksi pada unit yang sama di hari yang sama, sel matriks mengikuti inspeksi terakhir hari itu; sel merah jika ada temuan.
 
