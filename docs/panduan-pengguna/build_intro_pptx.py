@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Build the ITI-branded Indonesian kickoff deck (16:9).
+"""Build the ITI-branded customer deck (16:9).
+
+Bahasa Indonesia titles, one English subtitle each. Screenshots are from
+the pre-production site and live in images/intro/.
 
 Rebuild:
     python3 docs/panduan-pengguna/build_intro_pptx.py
@@ -23,8 +26,9 @@ from pptx.util import Inches, Pt
 
 ROOT = Path(__file__).resolve().parent
 IMAGES = ROOT / "images"
+INTRO = IMAGES / "intro"
 LOGO = IMAGES / "brand" / "logo.png"
-OUT = ROOT.parent / "Inspeksi_DT_Pengenalan.pptx"
+OUT = ROOT.parent / "Inspeksi_Aset_Pengenalan.pptx"
 
 SLIDE_W = Inches(13.333)
 SLIDE_H = Inches(7.5)
@@ -34,7 +38,6 @@ ACCENT = RGBColor(0x98, 0xA7, 0xD5)
 TINT = RGBColor(0xD6, 0xD2, 0xE9)
 PAPER = RGBColor(0xFF, 0xFF, 0xFF)
 MUTED = RGBColor(0x5C, 0x56, 0x62)
-WARN = RGBColor(0x8A, 0x3B, 0x2A)
 
 FONT_HEAD = "Poppins"
 FONT_BODY = "Roboto"
@@ -157,7 +160,7 @@ def add_framed_shot(slide, path: Path, left, top, width, max_height, *, pad=Inch
     slide.shapes.add_picture(str(path), px, py, width=pw, height=ph)
 
 
-def add_inner_chrome(slide, number: int, total: int):
+def add_inner_chrome(slide, number: int, total: int, kicker_text: str = "Pengenalan  ·  Inspeksi Aset"):
     set_slide_bg(slide, PAPER)
     logo = add_logo(slide, MARGIN_X, Inches(0.22), Inches(0.42))
     kicker = add_textbox(slide, logo.left + logo.width + Inches(0.22), Inches(0.28), Inches(7.5), Inches(0.32))
@@ -165,7 +168,7 @@ def add_inner_chrome(slide, number: int, total: int):
     tf.word_wrap = False
     write_para(
         tf,
-        "Pengenalan  ·  Inspeksi DT",
+        kicker_text,
         size=11,
         font=FONT_HEAD,
         bold=True,
@@ -232,11 +235,13 @@ def style_table(table, rows, col_widths):
             )
 
 
-def add_title(slide, text: str, *, top=Inches(0.92), size=26):
-    box = add_textbox(slide, MARGIN_X, top, Inches(12.2), Inches(0.55))
+def add_title(slide, text: str, subtitle: str = "", *, top=Inches(0.84), size=24):
+    box = add_textbox(slide, MARGIN_X, top, Inches(12.2), Inches(0.78))
     tf = box.text_frame
     tf.word_wrap = True
-    write_para(tf, text, size=size, font=FONT_HEAD, bold=True, color=INK, first=True, space_after=0)
+    write_para(tf, text, size=size, font=FONT_HEAD, bold=True, color=INK, first=True, space_after=1)
+    if subtitle:
+        write_para(tf, subtitle, size=13, font=FONT_BODY, color=MUTED, space_after=0)
     return box
 
 
@@ -274,11 +279,17 @@ def blank(prs: Presentation):
     return prs.slides.add_slide(prs.slide_layouts[6])
 
 
+TOTAL = 13
+BODY_TOP = Inches(1.72)
+SHOT_LEFT = Inches(6.85)
+SHOT_W = Inches(5.9)
+SHOT_H = Inches(5.05)
+
+
 def slide_cover(prs: Presentation):
     slide = blank(prs)
     set_slide_bg(slide, INK)
 
-    # 3×3 accent dots (shapes, not a rebuilt mark) — CSS nth-child(3n+2) uses tint
     grid_left = Inches(9.35)
     grid_top = Inches(1.55)
     cell = Inches(1.12)
@@ -286,7 +297,7 @@ def slide_cover(prs: Presentation):
     size = Inches(0.9)
     for r in range(3):
         for c in range(3):
-            idx = r * 3 + c  # 0-based
+            idx = r * 3 + c
             fill = TINT if (idx % 3 == 1) else ACCENT
             add_oval(slide, grid_left + c * (cell + gap), grid_top + r * (cell + gap), size, fill)
 
@@ -295,394 +306,301 @@ def slide_cover(prs: Presentation):
 
     kicker = add_textbox(slide, MARGIN_X, Inches(2.15), Inches(8.4), Inches(0.36))
     tf = kicker.text_frame
-    write_para(
-        tf,
-        "PANDUAN PENGENALAN",
-        size=12,
-        font=FONT_HEAD,
-        bold=True,
-        color=TINT,
-        first=True,
-        space_after=0,
-    )
+    write_para(tf, "PENGENALAN UNTUK PELANGGAN", size=12, font=FONT_HEAD, bold=True, color=TINT, first=True, space_after=0)
 
-    title = add_textbox(slide, MARGIN_X, Inches(2.52), Inches(8.6), Inches(1.15))
+    title = add_textbox(slide, MARGIN_X, Inches(2.52), Inches(8.6), Inches(1.05))
     tf = title.text_frame
     tf.word_wrap = True
-    write_para(tf, "Inspeksi DT", size=44, font=FONT_HEAD, bold=True, color=PAPER, first=True, space_after=0)
+    write_para(tf, "Inspeksi Aset", size=44, font=FONT_HEAD, bold=True, color=PAPER, first=True, space_after=0)
 
-    product = add_textbox(slide, MARGIN_X, Inches(3.7), Inches(8.6), Inches(0.42))
+    product = add_textbox(slide, MARGIN_X, Inches(3.62), Inches(8.6), Inches(0.85))
     tf = product.text_frame
-    write_para(
-        tf,
-        "Checklist walk-around digital untuk dump truck",
-        size=18,
-        font=FONT_HEAD,
-        bold=True,
-        color=ACCENT,
-        first=True,
-        space_after=0,
-    )
+    tf.word_wrap = True
+    write_para(tf, "Asset Inspection", size=20, font=FONT_HEAD, bold=True, color=ACCENT, first=True, space_after=2)
+    write_para(tf, "Checklist walk-around digital untuk dump truck", size=16, color=TINT, space_after=0)
 
-    add_rect(slide, MARGIN_X, Inches(4.28), Inches(1.65), Pt(2.5), ACCENT)
+    add_rect(slide, MARGIN_X, Inches(4.62), Inches(1.65), Pt(2.5), ACCENT)
 
-    meta = add_textbox(slide, MARGIN_X, Inches(4.55), Inches(8.4), Inches(1.4))
+    meta = add_textbox(slide, MARGIN_X, Inches(4.9), Inches(8.4), Inches(1.3))
     tf = meta.text_frame
     tf.word_wrap = True
     write_para(tf, "Inline Technology International", size=16, font=FONT_BODY, color=TINT, first=True, space_after=4)
-    write_para(tf, "Versi aplikasi 1.8.0  ·  16 Sep 2026", size=14, color=TINT, space_after=4)
-    write_para(tf, "Untuk semua peran  ·  ±10–15 menit", size=14, color=TINT, space_after=0)
-
-    add_notes(slide, "Buka dengan identitas ITI; sebutkan bahwa ini pengenalan, bukan pelatihan teknis penuh.")
+    write_para(tf, "15 Oktober 2026  ·  untuk pelanggan", size=14, color=TINT, space_after=0)
+    add_notes(slide, "Buka dengan tujuan: bukti foto dan jejak persetujuan, bukan pelatihan klik demi klik.")
     return slide
 
 
 def slide_agenda(prs, n, total):
     slide = blank(prs)
     add_inner_chrome(slide, n, total)
-    add_title(slide, "Agenda")
+    add_title(slide, "Agenda", "What we will cover")
     items = [
-        ("01", "Apa itu Inspeksi DT", "Checklist walk-around, foto bukti, persetujuan, rekap site."),
-        ("02", "Siapa yang memakai", "Lima peran: Superadmin sampai Driver dan Mekanik."),
-        ("03", "Alur Driver / Mekanik", "Unit dan tipe, checklist, foto, draf, kirim."),
-        ("04", "Alur admin", "Persetujuan site, master perusahaan, rekap."),
-        ("05", "Foto bukti", "Kamera in-app, cap GPS, batas 500 KB, masa simpan 90 hari."),
+        ("01", "Tujuan aplikasi", "Checklist walk-around, foto bukti, persetujuan, dan rekap site."),
+        ("02", "Siapa yang memakai", "Driver, mekanik, admin site, admin perusahaan, dan superadmin."),
+        ("03", "Alur di lapangan", "Pilih unit, isi checklist, foto, simpan draf, atau kirim."),
+        ("04", "Persetujuan dan laporan", "Admin meninjau kiriman, mengekspor PDF, dan melihat rekap."),
+        ("05", "Yang perlu diingat", "Draf di perangkat, foto berbatas waktu, kiriman tidak disunting."),
     ]
     col_w = Inches(5.85)
     for i, (num, title, body) in enumerate(items):
         col = i % 2
         row = i // 2
         left = MARGIN_X + col * (col_w + Inches(0.28))
-        top = Inches(1.62) + row * Inches(1.62)
-        add_rect(slide, left, top, col_w, Inches(1.42), TINT, rounded=True)
-        add_rect(slide, left, top, Inches(0.08), Inches(1.42), ACCENT)
-        num_box = add_textbox(slide, left + Inches(0.22), top + Inches(0.22), Inches(0.7), Inches(0.4))
+        top = Inches(1.78) + row * Inches(1.55)
+        if i == 4:
+            left = MARGIN_X
+            top = Inches(1.78) + 2 * Inches(1.55)
+            col_w_last = Inches(12.0)
+        else:
+            col_w_last = col_w
+        add_rect(slide, left, top, col_w_last, Inches(1.38), TINT, rounded=True)
+        add_rect(slide, left, top, Inches(0.08), Inches(1.38), ACCENT)
+        num_box = add_textbox(slide, left + Inches(0.22), top + Inches(0.2), Inches(0.7), Inches(0.36))
         tf = num_box.text_frame
         write_para(tf, num, size=18, font=FONT_HEAD, bold=True, color=ACCENT, first=True, space_after=0)
-        t = add_textbox(slide, left + Inches(0.95), top + Inches(0.22), col_w - Inches(1.2), Inches(0.38))
+        t = add_textbox(slide, left + Inches(0.95), top + Inches(0.18), col_w_last - Inches(1.2), Inches(0.36))
         tf = t.text_frame
         write_para(tf, title, size=16, font=FONT_HEAD, bold=True, first=True, space_after=0)
-        b = add_textbox(slide, left + Inches(0.95), top + Inches(0.62), col_w - Inches(1.2), Inches(0.62))
+        b = add_textbox(slide, left + Inches(0.95), top + Inches(0.56), col_w_last - Inches(1.2), Inches(0.66))
         tf = b.text_frame
         tf.word_wrap = True
         write_para(tf, body, size=13, color=MUTED, first=True, space_after=0)
-    add_notes(slide, "Janji waktu 10–15 menit; foto dan persetujuan dibahas singkat, bukan klik demi klik.")
+    add_notes(slide, "Janji waktu singkat. Jangan masuk ke konfigurasi server.")
     return slide
 
 
-def slide_apa_itu(prs, n, total):
+def slide_tujuan(prs, n, total):
     slide = blank(prs)
     add_inner_chrome(slide, n, total)
-    add_title(slide, "Apa itu Inspeksi DT")
+    add_title(slide, "Apa itu Inspeksi Aset", "A digital walk-around with evidence and approval")
     cards = [
-        ("Walk-around", "Checklist sesuai kategori kendaraan, dikurangi item yang dikecualikan pada tipe inspeksi."),
-        ("Foto bukti", "Jepret di aplikasi. Cap waktu, GPS, dan nama pemeriksa tertanam di berkas."),
-        ("Persetujuan", "Admin Site meninjau kiriman: Setujui atau Tolak. Setelah kirim, driver tidak mengedit."),
-        ("Rekap site", "Matriks hijau / merah / abu per unit. Ekspor CSV untuk laporan site."),
+        ("Walk-around", "Checklist mengikuti kategori kendaraan, dikurangi item yang dikecualikan pada tipe inspeksi."),
+        ("Foto bukti", "Foto diambil di aplikasi. Waktu, lokasi, dan nama pemeriksa tertanam di berkas."),
+        ("Persetujuan", "Admin site meninjau kiriman: Setujui atau Tolak. Setelah kirim, isian tidak diubah."),
+        ("Rekap site", "Matriks harian per unit: sudah diinspeksi, ada temuan, atau belum. Bisa diekspor."),
     ]
     for i, (k, b) in enumerate(cards):
         left = MARGIN_X + (i % 2) * Inches(6.15)
-        top = Inches(1.65) + (i // 2) * Inches(2.4)
-        add_card(slide, left, top, Inches(5.95), Inches(2.18), k, b)
-    add_notes(slide, "Tekankan bukti foto + jejak persetujuan, bukan sekadar centang kertas.")
+        top = Inches(1.78) + (i // 2) * Inches(2.35)
+        add_card(slide, left, top, Inches(5.95), Inches(2.15), k, b)
+    add_notes(slide, "Tekankan bukti dan jejak persetujuan, bukan pengganti keputusan mekanik di lapangan.")
     return slide
 
 
 def slide_peran(prs, n, total):
     slide = blank(prs)
     add_inner_chrome(slide, n, total)
-    add_title(slide, "Siapa yang memakai")
+    add_title(slide, "Siapa yang memakai", "Five roles, from the yard to the company office")
     rows = [
         ("Peran", "Fokus", "Tidak untuk"),
-        ("Superadmin", "Semua menu, termasuk Perusahaan", "—"),
-        ("Admin Perusahaan", "Master checklist, tipe, site, rekap", "Akun Superadmin lain"),
-        ("Admin Site", "Pengguna site, kendaraan, Setujui/Tolak, rekap", "Master checklist perusahaan"),
-        ("Driver", "Inspeksi Baru, Inspeksi Saya", "Data master, rekap, persetujuan"),
-        ("Mekanik", "Hak sama dengan Driver", "Sama dengan Driver"),
+        ("Driver / Mekanik", "Inspeksi baru, draf, dan inspeksi sendiri", "Master data, rekap, persetujuan"),
+        ("Admin Site", "Seluruh site, setujui atau tolak, pengguna site", "Master checklist perusahaan"),
+        ("Admin Perusahaan", "Checklist, tipe, site, dan rekap perusahaan", "Akun superadmin"),
+        ("Superadmin", "Semua perusahaan dan site", "Pekerjaan harian di lapangan"),
     ]
-    table_shape = slide.shapes.add_table(len(rows), 3, MARGIN_X, Inches(1.58), Inches(12.22), Inches(4.85))
-    style_table(table_shape.table, rows, [Inches(2.7), Inches(5.4), Inches(4.12)])
-    add_notes(slide, "Mekanik = Driver. Admin Site tidak mengubah kategori/item/tipe inspeksi.")
+    table_shape = slide.shapes.add_table(len(rows), 3, MARGIN_X, Inches(1.78), Inches(12.22), Inches(4.7))
+    style_table(table_shape.table, rows, [Inches(2.8), Inches(5.5), Inches(3.92)])
+    add_notes(slide, "Mekanik memakai alur yang sama dengan driver. Admin site tetap melihat seluruh laporan site.")
     return slide
 
 
-def slide_masuk(prs, n, total):
+def slide_beranda(prs, n, total):
     slide = blank(prs)
     add_inner_chrome(slide, n, total)
-    add_title(slide, "Masuk ke aplikasi")
+    add_title(slide, "Beranda setelah masuk", "Home after sign-in")
     add_bullets(
-        slide,
-        MARGIN_X,
-        Inches(1.58),
-        Inches(6.0),
-        Inches(5.1),
+        slide, MARGIN_X, BODY_TOP, Inches(6.05), Inches(4.9),
         [
-            [("Pilih bahasa ", False), ("EN / ID", True), (" di layar masuk.", False)],
-            [("Akun dikunci setelah ", False), ("5 percobaan gagal", True), (" — tunggu ", False), ("15 menit", True), (".", False)],
-            [("Tidak ada tautan ", False), ("lupa kata sandi", True), (". Minta admin mengubahnya di Pengguna & Peran.", False)],
-            [("Minimum kata sandi ", False), ("6 karakter", True), (". Kosongkan field saat ubah pengguna jika tidak diganti.", False)],
-            "Setelah masuk, menu mengikuti peran akun.",
+            "Angka hari ini: unit aktif, inspeksi, temuan, dan yang menunggu persetujuan.",
+            "Daftar inspeksi terbaru, dengan status Terkirim atau Disetujui.",
+            "Menu mengikuti peran. Bahasa EN / ID ada di pojok atas.",
+            "Tombol Mulai inspeksi membuka form yang sama dengan Inspeksi Baru.",
         ],
-        size=15,
-        space_after=14,
+        size=15, space_after=12,
     )
-    add_framed_shot(slide, IMAGES / "01-login.png", Inches(6.85), Inches(1.55), Inches(5.9), Inches(5.15))
-    add_notes(slide, "Jangan bagikan kata sandi produksi di sesi ini; demo hanya di slide terakhir.")
+    add_framed_shot(slide, INTRO / "dashboard.png", SHOT_LEFT, BODY_TOP, SHOT_W, SHOT_H)
+    add_notes(slide, "Tangkapan dari lingkungan pra-produksi. Jangan sebut kata sandi.")
     return slide
 
 
-def slide_driver_mulai(prs, n, total):
+def slide_mulai(prs, n, total):
     slide = blank(prs)
     add_inner_chrome(slide, n, total)
-    add_title(slide, "Driver: mulai inspeksi")
+    add_title(slide, "Mulai inspeksi", "Choose the unit, the type, and the hour meter")
     add_bullets(
-        slide,
-        MARGIN_X,
-        Inches(1.58),
-        Inches(6.05),
-        Inches(5.1),
+        slide, MARGIN_X, BODY_TOP, Inches(6.05), Inches(4.9),
         [
-            [("Pilih ", False), ("unit dan tipe inspeksi dulu", True), (". Checklist baru dimuat setelah keduanya terisi.", False)],
+            [("Pilih ", False), ("unit dan tipe dulu", True), (". Checklist baru muncul setelah keduanya terisi.", False)],
             [("Isi ", False), ("KM / HM", True), (" sesuai panel kendaraan.", False)],
-            [("Ganti site, unit, atau tipe saat form sudah diisi: konfirmasi dulu — jawaban dibuang, KM tetap.", False)],
-            "Driver/Mekanik, VIN, dan konfigurasi penggerak terisi otomatis.",
+            "VIN dan konfigurasi penggerak terisi dari data unit.",
+            "Ganti site, unit, atau tipe saat form sudah diisi: jawaban dibuang, KM tetap.",
         ],
-        size=15,
-        space_after=14,
+        size=15, space_after=12,
     )
-    add_framed_shot(slide, IMAGES / "03-inspeksi-baru.png", Inches(6.85), Inches(1.55), Inches(5.9), Inches(5.15))
-    add_notes(slide, "Tekankan gerbang unit + tipe. Jangan mulai isi checklist sebelum keduanya dipilih.")
+    add_framed_shot(slide, INTRO / "form.png", SHOT_LEFT, BODY_TOP, SHOT_W, SHOT_H)
+    add_notes(slide, "Jangan mulai mengisi item sebelum unit dan tipe dipilih.")
     return slide
 
 
-def slide_driver_checklist(prs, n, total):
+def slide_checklist(prs, n, total):
     slide = blank(prs)
     add_inner_chrome(slide, n, total)
-    add_title(slide, "Driver: isi checklist")
+    add_title(slide, "Isi checklist", "Every item starts OK; change only what is wrong")
     add_bullets(
-        slide,
-        MARGIN_X,
-        Inches(1.58),
-        Inches(6.05),
-        Inches(5.1),
+        slide, MARGIN_X, BODY_TOP, Inches(6.05), Inches(4.9),
         [
             [("Setiap item dimulai ", False), ("OK", True), (". Ubah hanya yang bermasalah.", False)],
-            [("Catatan dan foto ", False), ("opsional", True), (" — termasuk pada item yang tetap OK.", False)],
-            [("Lampu kilat (torch) ", False), ("jika kamera mendukung", True), (". Banyak komputer desktop tidak punya tombol ini.", False)],
-            "Unggah berkas dari galeri tidak memakai lampu kilat.",
-            "Kategori yang seluruh itemnya dikecualikan pada tipe tidak muncul.",
+            "Catatan dan foto boleh diisi, termasuk pada item yang tetap OK.",
+            "Pilihan status mengikuti item: Not OK, Korosi, Longgar, dan sejenisnya.",
+            "Item yang dikecualikan pada tipe inspeksi tidak muncul.",
         ],
-        size=15,
-        space_after=12,
+        size=15, space_after=12,
     )
-    add_framed_shot(slide, IMAGES / "04-checklist.png", Inches(6.85), Inches(1.55), Inches(5.9), Inches(5.15))
-    add_notes(slide, "Default OK mempercepat walk-around; foto tetap boleh pada item OK.")
+    add_framed_shot(slide, INTRO / "checklist.png", SHOT_LEFT, BODY_TOP, SHOT_W, SHOT_H)
+    add_notes(slide, "Default OK mempercepat keliling unit. Foto tetap boleh pada item OK.")
     return slide
 
 
-def slide_driver_foto(prs, n, total):
+def slide_foto(prs, n, total):
     slide = blank(prs)
     add_inner_chrome(slide, n, total)
-    add_title(slide, "Driver: foto bukti")
+    add_title(slide, "Foto bukti", "A stamped photo stays with the checklist item")
     cards = [
-        ("Jepret", "Buka kamera in-app. Izinkan akses kamera di peramban saat diminta."),
-        ("Ulangi", "Ambil ulang jika buram atau salah sudut. Pratinjau tetap hidup."),
-        ("Gunakan foto", "Kompresi otomatis, maksimum 500 KB, lalu tertanam di item."),
-        ("Cap bukti", "Tanggal/waktu, GPS atau “GPS tidak tersedia”, lokasi, nama pemeriksa."),
+        ("Jepret", "Kamera di aplikasi. Peramban atau ponsel harus mengizinkan kamera."),
+        ("Cap bukti", "Tanggal, jam, GPS bila tersedia, lokasi, dan nama pemeriksa tertanam di foto."),
+        ("Ukuran", "Berkas dikompresi otomatis, paling besar 500 KB, lalu menempel di item."),
+        ("Masa simpan", "Foto disimpan 90 hari. Catatan inspeksi tetap ada setelah berkas dibersihkan."),
     ]
     for i, (k, b) in enumerate(cards):
         left = MARGIN_X + (i % 2) * Inches(6.15)
-        top = Inches(1.62) + (i // 2) * Inches(2.42)
-        add_card(slide, left, top, Inches(5.95), Inches(2.2), k, b)
-    add_notes(slide, "Torch = lampu terus-menerus, bukan kilat sekali. GPS boleh “tidak tersedia”.")
+        top = Inches(1.78) + (i // 2) * Inches(2.35)
+        add_card(slide, left, top, Inches(5.95), Inches(2.15), k, b)
+    add_notes(slide, "GPS boleh tercatat tidak tersedia. Itu tidak membatalkan inspeksi.")
     return slide
 
 
-def slide_driver_draf(prs, n, total):
+def slide_draf(prs, n, total):
     slide = blank(prs)
     add_inner_chrome(slide, n, total)
-    add_title(slide, "Driver: draf dan kirim")
+    add_title(slide, "Draf, offline, dan Android", "Save on the device, then sync when the network returns")
     add_bullets(
-        slide,
-        MARGIN_X,
-        Inches(1.58),
-        Inches(6.05),
-        Inches(5.1),
+        slide, MARGIN_X, Inches(1.78), Inches(12.1), Inches(4.9),
         [
-            [("Simpan progres", True), (" menyimpan draf di perangkat ini saja — bukan di server.", False)],
-            [("Daftar draf: ", False), ("Inspeksi Baru", True), (" dan ", False), ("Inspeksi Saya", True), (". Lanjutkan atau Hapus draf.", False)],
+            [("Simpan progres", True), (" menyimpan draf di perangkat ini saja. Draf tidak naik ke server.", False)],
             "Draf hilang jika ganti peramban, hapus data situs, atau pindah ponsel.",
-            [("Setelah ", False), ("Kirim", True), (", inspeksi tidak bisa diedit. Status: Terkirim → Disetujui / Ditolak.", False)],
+            [("Driver, mekanik, dan admin site", True), (" dapat mengantre inspeksi saat offline, lalu menekan Sinkron.", False)],
+            "Admin perusahaan dan superadmin tetap bekerja saat tersambung.",
+            "Aplikasi Android memakai alur yang sama. PDF dari ponsel dibagikan lewat lembar berbagi Android.",
+            [("Setelah ", False), ("Kirim", True), (", inspeksi tidak bisa diedit. Status berjalan dari Terkirim ke Disetujui atau Ditolak.", False)],
         ],
-        size=15,
-        space_after=14,
+        size=16, space_after=12,
     )
-    add_framed_shot(slide, IMAGES / "02-beranda.png", Inches(6.85), Inches(1.55), Inches(5.9), Inches(5.15))
-    add_notes(slide, "Inspeksi Saya = kiriman server + draf lokal. Jangan andalkan draf sebagai arsip perusahaan.")
+    add_notes(slide, "Jangan menjanjikan draf sebagai arsip perusahaan.")
     return slide
 
 
-def slide_admin_site(prs, n, total):
+def slide_persetujuan(prs, n, total):
     slide = blank(prs)
     add_inner_chrome(slide, n, total)
-    add_title(slide, "Admin Site: setujui atau tolak")
+    add_title(slide, "Persetujuan", "A site admin approves or rejects the submission")
     add_bullets(
-        slide,
-        MARGIN_X,
-        Inches(1.58),
-        Inches(6.05),
-        Inches(5.1),
+        slide, MARGIN_X, BODY_TOP, Inches(6.05), Inches(4.9),
         [
-            [("Buka ", False), ("Laporan Inspeksi", True), (", pilih kiriman, tinjau checklist dan foto.", False)],
-            [("Setujui", True), (" atau ", False), ("Tolak", True), (". Keputusan ini menutup siklus driver.", False)],
-            "Kelola akun Driver dan Mekanik untuk site sendiri — bukan Admin Perusahaan.",
-            "Kelola daftar kendaraan site. Master checklist (kategori/item/tipe) milik perusahaan.",
+            "Buka Laporan Inspeksi, pilih kiriman, tinjau item dan foto.",
+            [("Setujui", True), (" atau ", False), ("Tolak", True), (". Catatan admin bersifat opsional.", False)],
+            "Tombol hanya muncul selagi status masih Terkirim.",
+            "Ekspor PDF ada di halaman yang sama, termasuk foto temuan.",
         ],
-        size=15,
-        space_after=14,
+        size=15, space_after=12,
     )
-    add_framed_shot(slide, IMAGES / "06-detail-persetujuan.png", Inches(6.85), Inches(1.55), Inches(5.9), Inches(5.15))
-    add_notes(slide, "Admin Site = operasional harian. Jangan janji mereka bisa mengubah item checklist.")
+    add_framed_shot(slide, INTRO / "detail.png", SHOT_LEFT, BODY_TOP, SHOT_W, SHOT_H)
+    add_notes(slide, "Jangan menekan Setujui atau Tolak saat demo jika datanya milik operasi nyata.")
     return slide
 
 
-def slide_admin_perusahaan(prs, n, total):
+def slide_laporan(prs, n, total):
     slide = blank(prs)
     add_inner_chrome(slide, n, total)
-    add_title(slide, "Admin Perusahaan: checklist dan tipe")
-    add_bullets(
-        slide,
-        MARGIN_X,
-        Inches(1.58),
-        Inches(6.05),
-        Inches(5.1),
-        [
-            [("Urutan master: ", False), ("item → kategori → tipe", True), (". Kategori kendaraan memasang kumpulan item.", False)],
-            [("Kecualikan item", True), (" pada tipe: dikurangi dari kumpulan itu. Daftar kosong = checklist penuh.", False)],
-            "Kategori yang seluruh itemnya dikecualikan tidak tampil di form.",
-            "Buat Admin Site, Driver, dan Mekanik. Tidak membuat Superadmin atau Admin Perusahaan lain.",
-        ],
-        size=14,
-        space_after=12,
-    )
-    add_framed_shot(slide, IMAGES / "11-tipe-kecualikan.png", Inches(6.85), Inches(1.55), Inches(5.9), Inches(5.15))
-    add_notes(slide, "Tipe adalah daftar pengecualian, bukan daftar item mandiri.")
+    add_title(slide, "Laporan dan PDF", "Filter the list, then export one inspection")
+    cards = [
+        ("Laporan Inspeksi", "Filter unit, status, tanggal, dan pemeriksa. Admin site melihat seluruh site. Driver melihat miliknya."),
+        ("Ekspor PDF", "Satu inspeksi menjadi berkas A4: ringkasan, tabel item, dan foto. Tautan membuka detail di aplikasi."),
+        ("Ekspor CSV", "Daftar yang sedang difilter dapat diunduh sebagai CSV untuk olah di spreadsheet."),
+        ("Inspeksi Saya", "Driver, mekanik, dan admin site melihat kiriman mereka sendiri, terpisah dari laporan site."),
+    ]
+    for i, (k, b) in enumerate(cards):
+        left = MARGIN_X + (i % 2) * Inches(6.15)
+        top = Inches(1.78) + (i // 2) * Inches(2.35)
+        add_card(slide, left, top, Inches(5.95), Inches(2.15), k, b)
+    add_notes(slide, "PDF mengikuti domain tempat aplikasi dibuka. Jangan janji sunting PDF di dalam sistem.")
     return slide
 
 
 def slide_rekap(prs, n, total):
     slide = blank(prs)
     add_inner_chrome(slide, n, total)
-    add_title(slide, "Rekap kendaraan site")
+    add_title(slide, "Rekap kendaraan site", "A daily matrix of which units were inspected")
     add_bullets(
-        slide,
-        MARGIN_X,
-        Inches(1.58),
-        Inches(6.05),
-        Inches(5.1),
+        slide, MARGIN_X, BODY_TOP, Inches(6.05), Inches(4.9),
         [
-            [("Matriks Harian", True), (": kisi unit × tanggal. Hijau = Diinspeksi, semua OK; merah = Ada temuan; abu = Belum diinspeksi.", False)],
-            "Klik sel untuk membuka detail. Beberapa inspeksi di hari yang sama: sel mengikuti inspeksi terakhir; merah jika ada temuan.",
-            [("Ekspor CSV Matriks", True), (" dan ", False), ("Ekspor CSV Ringkasan", True), (". Laporan Inspeksi punya Ekspor CSV mengikuti filter.", False)],
-            "Admin perusahaan memilih Site di dalam perusahaannya. Superadmin wajib pilih site.",
+            [("Hijau", True), (" = diinspeksi, semua OK. ", False), ("Merah", True), (" = ada temuan. Abu = belum diinspeksi.", False)],
+            "Beberapa inspeksi di hari yang sama mengikuti inspeksi terakhir. Sel merah jika ada temuan.",
+            "Ekspor CSV matriks dan CSV ringkasan untuk rentang tanggal yang dipilih.",
+            "Admin perusahaan memilih site di perusahaannya. Superadmin memilih site lebih dulu.",
         ],
-        size=15,
-        space_after=12,
+        size=15, space_after=12,
     )
-    add_framed_shot(slide, IMAGES / "07-rekap.png", Inches(6.85), Inches(1.55), Inches(5.9), Inches(5.15))
-    add_notes(slide, "Jangan overclaim arti warna di luar SOP manual; CSV untuk operasional site.")
+    add_framed_shot(slide, INTRO / "recap.png", SHOT_LEFT, BODY_TOP, SHOT_W, SHOT_H)
+    add_notes(slide, "Warna mengikuti keterangan di layar. Jangan menambah arti di luar itu.")
     return slide
 
 
 def slide_ingat(prs, n, total):
     slide = blank(prs)
     add_inner_chrome(slide, n, total)
-    add_title(slide, "Yang perlu diingat")
+    add_title(slide, "Yang perlu diingat", "Three limits worth stating before go-live")
     points = [
-        ("Checklist = kategori kendaraan minus exclude tipe", "Form hanya memuat item kategori unit, dikurangi Kecualikan item pada tipe yang dipilih."),
-        ("Draf hanya di perangkat", "Simpan progres tidak naik ke server. Ganti HP atau hapus data situs = draf hilang."),
-        ("Foto 90 hari", "Masa simpan default 90 hari. Data inspeksi tetap ada; berkas foto bisa dibersihkan."),
-        ("Setelah kirim, selesai", "Tidak ada sunting kiriman. Koreksi lewat inspeksi baru atau keputusan admin."),
+        ("Checklist mengikuti unit dan tipe", "Yang tampil adalah item kategori kendaraan, dikurangi item yang dikecualikan pada tipe."),
+        ("Draf hanya di perangkat", "Simpan progres tidak naik ke server. Ganti ponsel atau hapus data situs berarti draf hilang."),
+        ("Foto 90 hari", "Berkas foto dapat dibersihkan setelah masa simpan. Baris inspeksi dan catatannya tetap ada."),
+        ("Setelah kirim, selesai", "Isian tidak disunting. Koreksi dilakukan lewat inspeksi baru atau keputusan admin."),
     ]
     for i, (k, b) in enumerate(points):
-        top = Inches(1.55) + i * Inches(1.25)
-        add_rect(slide, MARGIN_X, top, Inches(0.12), Inches(1.08), ACCENT, rounded=True)
-        add_rect(slide, MARGIN_X + Inches(0.12), top, Inches(12.1), Inches(1.08), TINT)
-        t = add_textbox(slide, MARGIN_X + Inches(0.38), top + Inches(0.12), Inches(11.6), Inches(0.36))
+        top = Inches(1.72) + i * Inches(1.22)
+        add_rect(slide, MARGIN_X, top, Inches(0.12), Inches(1.06), ACCENT, rounded=True)
+        add_rect(slide, MARGIN_X + Inches(0.12), top, Inches(12.1), Inches(1.06), TINT)
+        t = add_textbox(slide, MARGIN_X + Inches(0.38), top + Inches(0.1), Inches(11.6), Inches(0.34))
         tf = t.text_frame
         write_para(tf, k, size=16, font=FONT_HEAD, bold=True, first=True, space_after=0)
-        d = add_textbox(slide, MARGIN_X + Inches(0.38), top + Inches(0.5), Inches(11.6), Inches(0.48))
+        d = add_textbox(slide, MARGIN_X + Inches(0.38), top + Inches(0.46), Inches(11.6), Inches(0.5))
         tf = d.text_frame
         tf.word_wrap = True
         write_para(tf, b, size=13, color=MUTED, first=True, space_after=0)
-    add_notes(slide, "Tiga pesan yang harus tertinggal: exclude tipe, draf lokal, foto 90 hari.")
-    return slide
-
-
-def slide_latihan(prs, n, total):
-    slide = blank(prs)
-    add_inner_chrome(slide, n, total)
-    add_title(slide, "Latihan lokal saja")
-
-    banner = add_rect(slide, MARGIN_X, Inches(1.55), Inches(12.22), Inches(0.72), TINT, rounded=True)
-    _ = banner
-    bt = add_textbox(slide, MARGIN_X + Inches(0.28), Inches(1.68), Inches(11.7), Inches(0.48))
-    tf = bt.text_frame
-    tf.word_wrap = True
-    write_para(
-        tf,
-        "Bukan SOP produksi. Akun di bawah hanya untuk lingkungan demo/latihan. Jangan dipakai di server live.",
-        size=14,
-        font=FONT_HEAD,
-        bold=True,
-        color=WARN,
-        first=True,
-        space_after=0,
-    )
-
-    rows = [
-        ("Peran", "Email", "Kata sandi (demo)"),
-        ("Driver", "driver@iti.demo", "Driver@1234"),
-        ("Admin Site", "admin@iti.demo", "Admin@1234"),
-        ("Admin Perusahaan", "company.admin@iti.demo", "Admin@1234"),
-    ]
-    table_shape = slide.shapes.add_table(len(rows), 3, MARGIN_X, Inches(2.5), Inches(12.22), Inches(3.15))
-    style_table(table_shape.table, rows, [Inches(3.2), Inches(5.4), Inches(3.62)])
-
-    note = add_textbox(slide, MARGIN_X, Inches(5.85), Inches(12.22), Inches(1.0))
-    tf = note.text_frame
-    tf.word_wrap = True
-    write_para(
-        tf,
-        "Superadmin tidak memakai panel akun demo (dibuat dari konfigurasi server). Mekanik seed mechanic@iti.demo tidak tampil di panel Akun demo. Frontend latihan: localhost:3000.",
-        size=13,
-        color=MUTED,
-        first=True,
-        space_after=0,
-    )
-    add_notes(slide, "Tegaskan slide ini latihan lokal. Tutup tanpa meninggalkan kata sandi di papan jika sesi hybrid.")
+    add_notes(slide, "Tiga pesan: exclude tipe, draf lokal, foto 90 hari.")
     return slide
 
 
 def build():
+    missing = [name for name in ("dashboard.png", "form.png", "checklist.png", "detail.png", "recap.png") if not (INTRO / name).exists()]
+    if missing:
+        raise SystemExit(f"Missing screenshots in {INTRO}: {', '.join(missing)}")
     if not LOGO.exists():
         raise SystemExit(f"Logo not found: {LOGO}")
     prs = new_prs()
     builders = [
         lambda: slide_cover(prs),
-        lambda: slide_agenda(prs, 2, 14),
-        lambda: slide_apa_itu(prs, 3, 14),
-        lambda: slide_peran(prs, 4, 14),
-        lambda: slide_masuk(prs, 5, 14),
-        lambda: slide_driver_mulai(prs, 6, 14),
-        lambda: slide_driver_checklist(prs, 7, 14),
-        lambda: slide_driver_foto(prs, 8, 14),
-        lambda: slide_driver_draf(prs, 9, 14),
-        lambda: slide_admin_site(prs, 10, 14),
-        lambda: slide_admin_perusahaan(prs, 11, 14),
-        lambda: slide_rekap(prs, 12, 14),
-        lambda: slide_ingat(prs, 13, 14),
-        lambda: slide_latihan(prs, 14, 14),
+        lambda: slide_agenda(prs, 2, TOTAL),
+        lambda: slide_tujuan(prs, 3, TOTAL),
+        lambda: slide_peran(prs, 4, TOTAL),
+        lambda: slide_beranda(prs, 5, TOTAL),
+        lambda: slide_mulai(prs, 6, TOTAL),
+        lambda: slide_checklist(prs, 7, TOTAL),
+        lambda: slide_foto(prs, 8, TOTAL),
+        lambda: slide_draf(prs, 9, TOTAL),
+        lambda: slide_persetujuan(prs, 10, TOTAL),
+        lambda: slide_laporan(prs, 11, TOTAL),
+        lambda: slide_rekap(prs, 12, TOTAL),
+        lambda: slide_ingat(prs, 13, TOTAL),
     ]
     for fn in builders:
         fn()
@@ -693,3 +611,5 @@ def build():
 
 if __name__ == "__main__":
     build()
+
+
