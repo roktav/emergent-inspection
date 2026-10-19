@@ -11,6 +11,17 @@
 # production
 /build
 
+# Capacitor / Android
+/android/.gradle/
+/android/**/build/
+/android/local.properties
+/android/captures/
+/android/.idea/
+/android/app/src/main/assets/public
+*.apk
+*.aab
+*.ap_
+
 # misc
 .DS_Store
 .env.local

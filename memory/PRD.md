@@ -1,11 +1,11 @@
-# DT Inspection — PRD
+# Asset Inspection — PRD
 
 ## Original Problem Statement
 Build a daily inspection application for the Driver inspecting the Dump Trucks (DT).
 - Master modules: Company, Site, Roles (Admin/Driver), Dump Trucks, Inspection Category, Inspection Module (items)
-- Transaction module: DT Inspection
+- Transaction module: Asset Inspection
 - Reporting module: Site Vehicle Inspection Recap
-- FR1 Superadmin manages company, site, role master data; FR2 Admin manages Dump Trucks, Inspection Category, Inspection Items; FR3 All users access DT Inspection; FR4 Admin manages Site Vehicle Inspection Recap
+- FR1 Superadmin manages company, site, role master data; FR2 Admin manages Dump Trucks, Inspection Category, Inspection Items; FR3 All users access Asset Inspection; FR4 Admin manages Site Vehicle Inspection Recap
 
 ## User Choices (gathered 2026-06)
 - Auth: JWT email/password (Bearer token)

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, XCircle, Clock, Gauge, User, ShieldCheck, Tag } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, Clock, Gauge, User, ShieldCheck, Tag, Download } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useT } from "../lib/i18n";
 import { api, errMsg } from "../lib/api";
+import { downloadInspectionPdf } from "../lib/inspectionPdf";
 import { AuthImage } from "../components/AuthImage";
 import { ApprovalBadge, StatusBadge } from "../components/StatusPill";
 import { Button } from "../components/ui/button";
@@ -29,6 +30,7 @@ export default function InspectionDetailPage() {
   const [insp, setInsp] = useState(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     api.get(`/inspections/${id}`).then((r) => setInsp(r.data)).catch((e) => toast.error(errMsg(e)));
@@ -44,6 +46,17 @@ export default function InspectionDetailPage() {
       toast.error(errMsg(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const exportPdf = async () => {
+    setExporting(true);
+    try {
+      await downloadInspectionPdf(insp, t);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -65,6 +78,9 @@ export default function InspectionDetailPage() {
           <div className="flex flex-col items-end gap-2">
             <ApprovalBadge status={insp.status} testId="detail-approval-status" />
             {insp.has_defect ? <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700" data-testid="detail-defect-count">{insp.defect_count} {t("defects")}</span> : <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700" data-testid="detail-defect-count">{t("no_defects")}</span>}
+            <Button variant="outline" onClick={exportPdf} disabled={exporting} className="rounded-full" data-testid="export-pdf-btn">
+              <Download className="mr-1 h-4 w-4" /> {exporting ? t("exporting_pdf") : t("export_pdf")}
+            </Button>
           </div>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">

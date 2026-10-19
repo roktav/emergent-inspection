@@ -6,7 +6,7 @@ import { StatusBadge } from "../components/StatusPill";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { AssignDialog } from "../components/AssignDialog";
-import { Layers, ListChecks } from "lucide-react";
+import { FilterX, Layers, ListChecks } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 
 const byId = (arr) => Object.fromEntries(arr.map((x) => [x.id, x]));
@@ -334,28 +334,67 @@ export function CategoriesPage() {
 }
 
 export function InspectionTypesPage() {
+  const { t } = useT();
   const { isSuper, companies, companyId, setCompanyId } = useCompanyScope();
+  const [reload, setReload] = useState(0);
+  const [assigning, setAssigning] = useState(null);
+  const items = useLookup(`/items${isSuper && companyId ? `?company_id=${companyId}` : ""}`, !isSuper || !!companyId, reload);
+  const cats = useLookup(`/categories${isSuper && companyId ? `?company_id=${companyId}` : ""}`, !isSuper || !!companyId, reload);
+  const itemCategoryLabel = useMemo(() => {
+    const map = {};
+    cats.forEach((c) => {
+      (c.item_ids || []).forEach((id) => {
+        map[id] = map[id] ? `${map[id]}, ${c.name}` : c.name;
+      });
+    });
+    return map;
+  }, [cats]);
   return (
-    <MasterPage
-      titleKey="inspection_types"
-      endpoint="/inspection-types"
-      testPrefix="inspection-types"
-      query={isSuper ? { company_id: companyId } : undefined}
-      defaults={isSuper ? { company_id: companyId } : {}}
-      headerExtra={isSuper ? <CompanySelect value={companyId} onChange={setCompanyId} companies={companies} /> : null}
-      columns={[
-        { key: "name", label: "name", render: (r) => <span className="font-semibold">{r.name}</span> },
-        { key: "code", label: "code", render: (r) => r.code ? <Badge variant="secondary" className="font-mono">{r.code}</Badge> : "—" },
-        { key: "description", label: "description" },
-        { key: "is_active", label: "status" },
-      ]}
-      fields={[
-        { key: "name", label: "name", required: true },
-        { key: "code", label: "code" },
-        { key: "description", label: "description", type: "textarea" },
-        { key: "is_active", label: "is_active", type: "switch" },
-      ]}
-    />
+    <>
+      <MasterPage
+        titleKey="inspection_types"
+        endpoint="/inspection-types"
+        testPrefix="inspection-types"
+        reloadKey={reload}
+        query={isSuper ? { company_id: companyId } : undefined}
+        defaults={isSuper ? { company_id: companyId } : {}}
+        headerExtra={isSuper ? <CompanySelect value={companyId} onChange={setCompanyId} companies={companies} /> : null}
+        rowActions={(row) => (
+          <Button variant="outline" size="sm" className="h-8 rounded-full" onClick={() => setAssigning(row)} data-testid={`inspection-types-exclude-${row.id}`}>
+            <FilterX className="mr-1 h-3.5 w-3.5" /> {t("exclude_items")}
+          </Button>
+        )}
+        columns={[
+          { key: "name", label: "name", render: (r) => <span className="font-semibold">{r.name}</span> },
+          { key: "code", label: "code", render: (r) => r.code ? <Badge variant="secondary" className="font-mono">{r.code}</Badge> : "—" },
+          { key: "description", label: "description" },
+          { key: "excluded_item_ids", label: "excluded_items_count", render: (r) => (
+            <Badge variant="secondary">{(r.excluded_item_ids || []).length} {t("excluded_items")}</Badge>
+          ) },
+          { key: "is_active", label: "status" },
+        ]}
+        fields={[
+          { key: "name", label: "name", required: true },
+          { key: "code", label: "code" },
+          { key: "description", label: "description", type: "textarea" },
+          { key: "is_active", label: "is_active", type: "switch" },
+        ]}
+      />
+      <AssignDialog
+        open={!!assigning}
+        onClose={() => setAssigning(null)}
+        title={`${t("exclude_items")} · ${assigning?.name || ""}`}
+        subtitle={t("exclude_items_hint")}
+        options={items.map((i) => ({ id: i.id, label: i.name, sub: itemCategoryLabel[i.id] || i.guidance }))}
+        initialIds={assigning?.excluded_item_ids || []}
+        saveUrl={`/inspection-types/${assigning?.id}/excluded-items`}
+        onSaved={() => setReload((x) => x + 1)}
+        testPrefix="inspection-types"
+        assignedLabel={t("excluded")}
+        availableLabel={t("available")}
+        assignedEmpty={t("no_excluded")}
+      />
+    </>
   );
 }
 

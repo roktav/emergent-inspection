@@ -1,4 +1,4 @@
-# Auth Testing Playbook (DT Inspection)
+# Auth Testing Playbook (Asset Inspection)
 
 Auth is Bearer-token based (JWT, HS256, 12h). Login returns `access_token` in body; frontend stores it in localStorage `dt_token` and sends `Authorization: Bearer`. `?auth=<token>` query is also accepted (for image tags).
 

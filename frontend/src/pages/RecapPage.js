@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Download, CheckCircle2, AlertTriangle, Minus } from "lucide-react";
 import { useT } from "../lib/i18n";
 import { api, downloadCsv, errMsg } from "../lib/api";
+import { formatRange, ListPager, useClientPager } from "../components/ListPager";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
@@ -41,6 +42,11 @@ export default function RecapPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsSitePicker, siteId, from, to]);
 
+  const trucks = data?.trucks || [];
+  const { page, setPage, slice: pagedTrucks, total: truckTotal, pageSize } = useClientPager(trucks, {
+    resetKey: `${siteId || ""}|${from}|${to}`,
+  });
+
   const exportCsv = (kind) => downloadCsv("/recap/export", { ...params, kind }, `recap_${kind}_${from}_${to}.csv`).catch((e) => toast.error(errMsg(e)));
 
   const totals = data ? data.trucks.reduce((a, tr) => ({ ins: a.ins + tr.total_inspections, def: a.def + tr.defects_found, pend: a.pend + tr.pending }), { ins: 0, def: 0, pend: 0 }) : null;
@@ -49,7 +55,7 @@ export default function RecapPage() {
     <div className="fade-up space-y-5" data-testid="recap-page">
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight lg:text-3xl">{t("recap")}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t("matrix")} · {t("summary")}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{t("matrix")} · {t("summary")}{truckTotal ? ` · ${formatRange(t, page, pageSize, truckTotal)}` : ""}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-white p-3 shadow-sm">
@@ -90,8 +96,8 @@ export default function RecapPage() {
                 </thead>
                 <tbody>
                   {loading && <tr><td colSpan={99} className="py-10 text-center text-muted-foreground">{t("loading")}</td></tr>}
-                  {!loading && data?.trucks.length === 0 && <tr><td colSpan={99} className="py-10 text-center text-muted-foreground">{t("no_data")}</td></tr>}
-                  {!loading && data?.trucks.map((tr) => (
+                  {!loading && trucks.length === 0 && <tr><td colSpan={99} className="py-10 text-center text-muted-foreground">{t("no_data")}</td></tr>}
+                  {!loading && pagedTrucks.map((tr) => (
                     <tr key={tr.id} className="border-b last:border-0 hover:bg-brand-bg/50" data-testid={`recap-row-${tr.hull_number}`}>
                       <td className="px-4 py-2 font-semibold">{tr.hull_number} <span className="ml-1 font-mono text-[10px] font-normal text-muted-foreground">{tr.unit_vin_number}</span></td>
                       {data.dates.map((d) => <td key={d} className="px-1.5 py-2 text-center"><Cell cell={tr.cells[d]} /></td>)}
@@ -106,6 +112,7 @@ export default function RecapPage() {
               <span className="flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5 text-red-700" /> {t("has_defects")}</span>
               <span className="flex items-center gap-1"><Minus className="h-3.5 w-3.5" /> {t("not_inspected")}</span>
             </div>
+            <ListPager page={page} pageSize={pageSize} total={truckTotal} onPageChange={setPage} testId="recap-pager" />
           </div>
         </TabsContent>
 
@@ -121,7 +128,7 @@ export default function RecapPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data?.trucks.map((tr) => (
+                  {pagedTrucks.map((tr) => (
                     <TableRow key={tr.id} data-testid={`summary-row-${tr.hull_number}`}>
                       <TableCell className="font-semibold">{tr.hull_number}</TableCell>
                       <TableCell className="font-mono text-xs">{tr.unit_vin_number || "—"}</TableCell>
@@ -141,6 +148,7 @@ export default function RecapPage() {
                 </TableBody>
               </Table>
             </div>
+            <ListPager page={page} pageSize={pageSize} total={truckTotal} onPageChange={setPage} testId="recap-summary-pager" />
           </div>
         </TabsContent>
       </Tabs>

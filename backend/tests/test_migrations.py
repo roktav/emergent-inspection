@@ -255,6 +255,7 @@ def test_apply_migrations_is_additive_from_v1():
     assert "site_id" not in db.inspection_categories.docs[0]
     insp = db.inspections.docs[0]
     assert insp["inspection_type_id"] == str(type_id)
+    assert db.inspection_types.docs[0].get("excluded_item_ids") == []
     assert db.meta.docs[0]["version"] == LATEST_SCHEMA_VERSION
 
 

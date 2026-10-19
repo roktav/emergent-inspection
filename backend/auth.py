@@ -30,6 +30,32 @@ def create_access_token(user_id: str, email: str, role: str) -> str:
     return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm=JWT_ALGORITHM)
 
 
+def create_refresh_token(user_id: str, email: str, role: str) -> str:
+    payload = {
+        "sub": user_id,
+        "email": email,
+        "role": role,
+        "type": "refresh",
+        "exp": datetime.now(timezone.utc) + timedelta(days=30),
+    }
+    return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm=JWT_ALGORITHM)
+
+
+async def user_from_refresh_token(token: str) -> dict:
+    try:
+        payload = jwt.decode(token, os.environ["JWT_SECRET"], algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+    user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
+    if not user or not user.get("is_active", True):
+        raise HTTPException(status_code=401, detail="User not found or inactive")
+    return user
+
+
 async def get_current_user(request: Request) -> dict:
     token = None
     header = request.headers.get("Authorization", "")

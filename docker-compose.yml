@@ -28,9 +28,12 @@ services:
     build:
       context: ./frontend
       args:
-        # CRA bakes this into the JS bundle at build time. For local Docker set
+        # CRA bakes both into the JS bundle at build time. For local Docker set
         # REACT_APP_BACKEND_URL=http://localhost:8801 in `.env` (see README).
+        # REACT_APP_PUBLIC_URL is the PDF link when the page is localhost:8802
+        # or the Android WebView. Another domain must override this and rebuild.
         REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-https://inspection.inlinetechint.org}
+        REACT_APP_PUBLIC_URL: ${REACT_APP_PUBLIC_URL:-https://inspection.inlinetechint.org}
     container_name: inspection-frontend
     restart: unless-stopped
     ports:

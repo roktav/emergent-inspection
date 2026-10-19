@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Truck, ShieldCheck } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -16,6 +16,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const { t } = useT();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,7 +26,8 @@ export default function LoginPage() {
     setBusy(true);
     try {
       await login(email, password);
-      navigate("/");
+      const next = searchParams.get("next");
+      navigate(next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
     } catch (err) {
       toast.error(errMsg(err, t("login_failed")));
     } finally {
